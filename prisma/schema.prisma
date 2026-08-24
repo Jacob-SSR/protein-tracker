@@ -1,0 +1,404 @@
+// Protein Tracker — Prisma schema
+//
+// Provider: PostgreSQL (Supabase) วันนี้ / MySQL ในอนาคต
+// ข้อควรระวังตอนย้าย provider ดู README.md หัวข้อ "PostgreSQL -> MySQL"
+//  - ห้ามพึ่ง partial unique index ของ Postgres เป็นเกราะเดียว (ดู lib/protein/calculation-service.ts)
+//  - Json field ใช้อ่าน/เขียนทั้งก้อนเท่านั้น ห้าม query เข้าไปใน structure
+//  - @db.Date / cuid() รองรับทั้งสอง provider
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Prisma 7: connection URL ย้ายไปอยู่ใน prisma.config.ts แล้ว (ไม่ใช่ในไฟล์นี้)
+// runtime ต่อ DB ผ่าน driver adapter ที่ src/lib/db/prisma.ts
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------- enums
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  USER
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum ConditionType {
+  EGFR
+  ALBUMIN
+  BUN
+  CREATININE
+  POTASSIUM
+  PHOSPHORUS
+  BMI
+  AGE
+  WEIGHT
+  CKD_STAGE
+  COMORBIDITY
+  DIALYSIS
+}
+
+enum ConditionOperator {
+  LT
+  LTE
+  GT
+  GTE
+  EQ
+  NEQ
+}
+
+enum FoodStatus {
+  PENDING
+  ACTIVE
+  REJECTED
+  ARCHIVED
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+  SNACK
+}
+
+enum HistoryAction {
+  CREATE
+  UPDATE
+  DELETE
+}
+
+enum SettingValueType {
+  STRING
+  INT
+  FLOAT
+  BOOLEAN
+  JSON
+}
+
+// ---------------------------------------------------------------- identity
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  email        String?  @unique
+  passwordHash String
+  fullName     String
+  role         Role     @default(USER)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  patient Patient?
+
+  proteinRules          ProteinRule[]
+  confirmedCalculations ProteinCalculation[]
+  auditLogs             AuditLog[]           @relation("AuditActor")
+  recordedMeasurements  PatientMeasurement[]
+  recordedLabs          PatientLab[]
+  proposedFoods         Food[]               @relation("FoodProposedBy")
+  approvedFoods         Food[]               @relation("FoodApprovedBy")
+  createdMealItems      MealItem[]
+  mealItemChanges       MealItemHistory[]
+  updatedSettings       SystemSetting[]
+  authoredKnowledge     Knowledge[]
+
+  @@index([role])
+}
+
+model Patient {
+  id        String    @id @default(cuid())
+  userId    String    @unique
+  hn        String    @unique
+  birthDate DateTime? @db.Date
+  gender    Gender?
+  note      String?
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  measurements  PatientMeasurement[]
+  labs          PatientLab[]
+  comorbidities PatientComorbidity[]
+  calculations  ProteinCalculation[]
+  meals         Meal[]
+}
+
+// น้ำหนัก/ส่วนสูงแยกออกจาก Patient เพื่อเก็บประวัติ ไม่ overwrite ค่าเดิม
+model PatientMeasurement {
+  id           String   @id @default(cuid())
+  patientId    String
+  measuredOn   DateTime @db.Date
+  weightKg     Decimal  @db.Decimal(6, 2)
+  heightCm     Decimal? @db.Decimal(5, 1)
+  note         String?
+  recordedById String
+  createdAt    DateTime @default(now())
+
+  patient    Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  recordedBy User    @relation(fields: [recordedById], references: [id])
+
+  @@index([patientId, measuredOn])
+}
+
+// labType ยังเป็น free string โดยตั้งใจ — รอ list ผลเลือดจริงก่อนทำ master table LabType
+// เมื่อทำแล้วให้เพิ่ม labTypeId แล้วค่อย backfill จาก labType เดิม
+model PatientLab {
+  id           String   @id @default(cuid())
+  patientId    String
+  labType      String
+  value        Decimal  @db.Decimal(12, 4)
+  unit         String?
+  measuredOn   DateTime @db.Date
+  note         String?
+  recordedById String
+  createdAt    DateTime @default(now())
+
+  patient    Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  recordedBy User    @relation(fields: [recordedById], references: [id])
+
+  @@index([patientId, labType, measuredOn])
+}
+
+model Comorbidity {
+  id       String  @id @default(cuid())
+  code     String  @unique
+  name     String
+  isActive Boolean @default(true)
+
+  patients PatientComorbidity[]
+}
+
+model PatientComorbidity {
+  id            String    @id @default(cuid())
+  patientId     String
+  comorbidityId String
+  diagnosedOn   DateTime? @db.Date
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+
+  patient     Patient     @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  comorbidity Comorbidity @relation(fields: [comorbidityId], references: [id])
+
+  @@unique([patientId, comorbidityId])
+}
+
+// ---------------------------------------------------------------- protein rules
+
+model ProteinRule {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  // priority น้อย = ตรวจก่อน กฎแรกที่ match ทุกเงื่อนไขคือกฎที่ใช้
+  priority    Int      @default(100)
+  version     Int      @default(1)
+  isActive    Boolean  @default(true)
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdBy  User                   @relation(fields: [createdById], references: [id])
+  conditions ProteinRuleCondition[]
+
+  @@index([isActive, priority])
+}
+
+model ProteinRuleCondition {
+  id            String            @id @default(cuid())
+  ruleId        String
+  conditionType ConditionType
+  operator      ConditionOperator
+  // เก็บเป็น string เพื่อรองรับทั้งตัวเลข (eGFR < 30) และ code (COMORBIDITY = "DM")
+  value         String
+  // g โปรตีน / kg / วัน ของกฎนี้ (ทุก condition ในกฎเดียวกันควรใส่ค่าเท่ากัน)
+  proteinFactor Decimal           @db.Decimal(5, 3)
+  sortOrder     Int               @default(0)
+
+  rule ProteinRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([ruleId, sortOrder])
+}
+
+// Snapshot ของผลการคำนวณ — ห้าม update ค่าเดิม ปิดแถวเก่าด้วย effectiveTo แล้วสร้างแถวใหม่เสมอ
+model ProteinCalculation {
+  id                 String    @id @default(cuid())
+  patientId          String
+  ruleId             String?
+  ruleVersion        Int?
+  ruleNameSnapshot   String?
+  referenceWeightKg  Decimal   @db.Decimal(6, 2)
+  proteinFactor      Decimal   @db.Decimal(5, 3)
+  proteinTargetGrams Decimal   @db.Decimal(7, 2)
+  // snapshot ของ input ทั้งหมดที่ใช้คำนวณ (weight, labs, comorbidities, rule) — อ่าน/เขียนทั้งก้อน
+  inputSnapshot      Json
+  note               String?
+  effectiveFrom      DateTime  @db.Date
+  effectiveTo        DateTime? @db.Date
+  confirmedById      String
+  confirmedAt        DateTime  @default(now())
+  createdAt          DateTime  @default(now())
+
+  patient     Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  confirmedBy User    @relation(fields: [confirmedById], references: [id])
+
+  @@index([patientId, effectiveFrom])
+  @@index([patientId, effectiveTo])
+}
+
+// ---------------------------------------------------------------- food
+
+model Food {
+  id           String     @id @default(cuid())
+  name         String
+  category     String?
+  description  String?
+  status       FoodStatus @default(PENDING)
+  proposedById String?
+  approvedById String?
+  approvedAt   DateTime?
+  rejectReason String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  // ผูก FK จริงทั้งคู่ (Draft แรกเป็น String? ลอยๆ) — onDelete: SetNull กัน error ตอนลบ user
+  proposedBy User? @relation("FoodProposedBy", fields: [proposedById], references: [id], onDelete: SetNull)
+  approvedBy User? @relation("FoodApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  units     FoodUnit[]
+  mealItems MealItem[]
+
+  @@index([status, name])
+}
+
+// หนึ่งอาหารมีได้หลายหน่วย เช่น อกไก่ = 100 g / 1 ชิ้น / 1 จาน
+model FoodUnit {
+  id           String  @id @default(cuid())
+  foodId       String
+  unitName     String
+  gramsPerUnit Decimal? @db.Decimal(8, 2)
+  // g โปรตีน ต่อ 1 หน่วยนี้
+  proteinAmount Decimal @db.Decimal(7, 2)
+  isDefault     Boolean @default(false)
+  sortOrder     Int     @default(0)
+
+  food      Food       @relation(fields: [foodId], references: [id], onDelete: Cascade)
+  mealItems MealItem[]
+
+  @@unique([foodId, unitName])
+}
+
+// ---------------------------------------------------------------- meal
+
+model Meal {
+  id        String   @id @default(cuid())
+  patientId String
+  mealDate  DateTime @db.Date
+  mealType  MealType
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  patient Patient    @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  items   MealItem[]
+
+  @@unique([patientId, mealDate, mealType])
+  @@index([patientId, mealDate])
+}
+
+// hard delete โดยตั้งใจ — ประวัติทั้งหมดอยู่ที่ MealItemHistory
+model MealItem {
+  id               String   @id @default(cuid())
+  mealId           String
+  foodId           String
+  foodUnitId       String
+  foodNameSnapshot String
+  unitNameSnapshot String
+  quantity         Decimal  @db.Decimal(8, 2)
+  // snapshot: FoodUnit.proteinAmount x quantity ณ เวลาที่บันทึก ไม่คำนวณสดจาก Food ทุกครั้ง
+  proteinAmount    Decimal  @db.Decimal(8, 2)
+  createdById      String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  meal      Meal     @relation(fields: [mealId], references: [id], onDelete: Cascade)
+  food      Food     @relation(fields: [foodId], references: [id])
+  foodUnit  FoodUnit @relation(fields: [foodUnitId], references: [id])
+  createdBy User     @relation(fields: [createdById], references: [id])
+
+  @@index([mealId])
+}
+
+// mealItemId เป็น String ลอยๆ โดยตั้งใจ — MealItem ถูก hard delete แถว history ต้องอยู่รอด
+model MealItemHistory {
+  id          String        @id @default(cuid())
+  mealItemId  String
+  mealId      String
+  patientId   String
+  mealDate    DateTime      @db.Date
+  action      HistoryAction
+  oldValue    Json?
+  newValue    Json?
+  changedById String
+  changedAt   DateTime      @default(now())
+
+  changedBy User @relation(fields: [changedById], references: [id])
+
+  @@index([mealItemId])
+  @@index([patientId, mealDate])
+}
+
+// ---------------------------------------------------------------- ops
+
+// append-only — ไม่มี API ลบ/แก้ อ่านได้เฉพาะ SUPER_ADMIN
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String
+  targetType String
+  targetId   String?
+  oldValue   Json?
+  newValue   Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  actor User? @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([targetType, targetId])
+  @@index([actorId, createdAt])
+}
+
+model SystemSetting {
+  key         String           @id
+  value       String
+  valueType   SettingValueType @default(STRING)
+  description String?
+  updatedById String?
+  updatedAt   DateTime         @updatedAt
+
+  updatedBy User? @relation(fields: [updatedById], references: [id], onDelete: SetNull)
+}
+
+model Knowledge {
+  id          String   @id @default(cuid())
+  slug        String
+  title       String
+  content     String
+  version     Int      @default(1)
+  isPublished Boolean  @default(false)
+  authorId    String
+  createdAt   DateTime @default(now())
+
+  author User @relation(fields: [authorId], references: [id])
+
+  @@unique([slug, version])
+  @@index([slug, isPublished])
+}
