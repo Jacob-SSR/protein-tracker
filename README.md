@@ -47,6 +47,19 @@ npm run db:deploy
 > ใช้ `db:deploy` เท่านั้นกับ Supabase — `db:migrate` (migrate dev) ต้องสร้าง shadow database
 > ซึ่ง Supabase ไม่ให้สิทธิ์ และจะสร้างไฟล์ migration ใหม่มาชนกับของเดิม
 
+### เจอ error `Unknown field ... for select statement`
+
+แปลว่า Prisma Client ที่ generate ไว้เก่ากว่า `schema.prisma` (เกิดตอนดึงโค้ดใหม่มาแล้วไม่ได้ `npm install`)
+แก้ตามลำดับนี้ — **ห้ามสลับลำดับ** เพราะถ้า generate ก่อน deploy จะไปพังที่ระดับฐานข้อมูลแทน
+
+```bash
+npm run db:deploy    # 1. เพิ่มคอลัมน์ใหม่ลง DB ก่อน
+npx prisma generate  # 2. แล้วค่อย generate client ให้ตรง schema
+npm run dev          # 3. รีสตาร์ท (Turbopack cache client ตัวเก่าไว้)
+```
+
+ตอนนี้ script `dev` รัน `prisma generate` ให้อัตโนมัติทุกครั้งอยู่แล้ว ปัญหานี้จึงไม่ควรเกิดซ้ำ
+
 ### Partial unique index (Postgres)
 
 หลัง migrate ครั้งแรก ให้เพิ่ม index ตาม `prisma/sql/001_protein_calculation_active_unique.sql`:
