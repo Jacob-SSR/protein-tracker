@@ -9,6 +9,8 @@ export const ruleBodySchema = z.object({
   name: z.string().trim().min(1).max(200),
   description: z.string().trim().max(500).optional(),
   priority: z.number().int().min(1).max(9999),
+  /** ฐานน้ำหนักที่จะเอาไปคูณกับ proteinFactor */
+  weightBasis: z.enum(['ACTUAL', 'IBW', 'ADJUSTED']).default('ACTUAL'),
   /** g โปรตีน / kg น้ำหนักตัว / วัน — ใช้ค่าเดียวทั้งกฎ */
   proteinFactor: z.number().min(0.1).max(5),
   isActive: z.boolean().default(true),
@@ -16,6 +18,7 @@ export const ruleBodySchema = z.object({
     .array(
       z.object({
         conditionType: z.enum([
+          'GENDER',
           'EGFR',
           'ALBUMIN',
           'BUN',
@@ -51,6 +54,7 @@ export async function GET() {
         name: rule.name,
         description: rule.description,
         priority: rule.priority,
+        weightBasis: rule.weightBasis,
         version: rule.version,
         isActive: rule.isActive,
         proteinFactor: rule.conditions[0] ? num(rule.conditions[0].proteinFactor) : null,
@@ -76,6 +80,7 @@ export async function POST(request: Request) {
           name: body.name,
           description: body.description || null,
           priority: body.priority,
+          weightBasis: body.weightBasis,
           isActive: body.isActive,
           createdById: session.userId,
           conditions: {

@@ -33,6 +33,11 @@ export async function POST(request: Request) {
     })
     await setSessionCookie(token)
 
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() },
+    })
+
     await writeAudit(prisma, {
       actorId: user.id,
       action: 'AUTH_LOGIN',

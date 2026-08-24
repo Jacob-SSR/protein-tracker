@@ -34,6 +34,7 @@ export default async function AdminProteinRulesPage() {
           name: rule.name,
           description: rule.description,
           priority: rule.priority,
+          weightBasis: rule.weightBasis,
           version: rule.version,
           isActive: rule.isActive,
           proteinFactor: rule.conditions[0] ? num(rule.conditions[0].proteinFactor) : 1,

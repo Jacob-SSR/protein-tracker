@@ -2,14 +2,27 @@ import { prisma } from '@/lib/db/prisma'
 import { formatDateOnly, today } from '@/lib/date'
 import { num, round2 } from '@/lib/decimal'
 import { notFound, badRequest } from '@/lib/errors'
-import { selectRule, type PatientFacts, type RuleEvaluation } from './rules'
+import type { Gender } from '@prisma/client'
+import {
+  resolveReferenceWeight,
+  selectRule,
+  WEIGHT_BASIS_LABELS,
+  type PatientFacts,
+  type RuleEvaluation,
+} from './rules'
+import type { WeightBasis } from '@prisma/client'
 
 export type ProteinPreview = {
   patientId: string
   facts: PatientFacts
   evaluations: RuleEvaluation[]
   selected: RuleEvaluation | null
-  referenceWeightKg: number
+  /** น้ำหนักที่ถูกนำไปคูณจริงตามฐานของกฎที่เลือก */
+  referenceWeightKg: number | null
+  weightBasis: WeightBasis | null
+  weightBasisLabel: string | null
+  /** เหตุผลที่คำนวณไม่ได้ เช่น กฎใช้ IBW แต่ไม่มีส่วนสูง */
+  blockedReason: string | null
   proteinFactor: number | null
   proteinTargetGrams: number | null
   /** วันที่เป้าหมายใหม่จะเริ่มมีผล (พรุ่งนี้เสมอ) */
@@ -20,6 +33,32 @@ export type ProteinPreview = {
     proteinFactor: number
     effectiveFrom: string
   } | null
+}
+
+/**
+ * น้ำหนักอุดมคติ สูตร Devine
+ *   ชาย   50   + 2.3 x (ส่วนสูงเป็นนิ้ว - 60)
+ *   หญิง  45.5 + 2.3 x (ส่วนสูงเป็นนิ้ว - 60)
+ * ต้องมีทั้งส่วนสูงและเพศชาย/หญิง — เพศ OTHER หรือไม่ระบุ คำนวณไม่ได้
+ */
+function idealBodyWeight(heightCm: number | null, gender: Gender | null): number | null {
+  if (!heightCm || (gender !== 'MALE' && gender !== 'FEMALE')) return null
+  const inches = heightCm / 2.54
+  const base = gender === 'MALE' ? 50 : 45.5
+  const ibw = base + 2.3 * (inches - 60)
+  // คนตัวเล็กมากสูตรนี้ให้ค่าติดลบได้ ตัดพื้นไว้ที่ 30 kg กันค่าประหลาด
+  return round2(Math.max(ibw, 30))
+}
+
+/** BMI >= 30 ใช้ IBW + 0.25 x (จริง - IBW) ไม่ถึงใช้น้ำหนักจริง */
+function adjustedBodyWeight(
+  actualKg: number,
+  ibwKg: number | null,
+  bmi: number | null,
+): number | null {
+  if (ibwKg === null) return null
+  if (bmi === null || bmi < 30) return actualKg
+  return round2(ibwKg + 0.25 * (actualKg - ibwKg))
 }
 
 function ageInYears(birthDate: Date | null, asOf: Date): number | null {
@@ -78,14 +117,18 @@ export async function buildPatientFacts(patientId: string, asOf: Date): Promise<
   }
 
   const comorbidityCodes = patient.comorbidities.map((row) => row.comorbidity.code.toUpperCase())
+  const ibwKg = idealBodyWeight(heightCm, patient.gender)
 
   return {
     patientId,
     asOf: formatDateOnly(asOf),
     ageYears: ageInYears(patient.birthDate, asOf),
+    gender: patient.gender,
     weightKg,
     heightCm,
     bmi,
+    ibwKg,
+    adjustedWeightKg: adjustedBodyWeight(weightKg, ibwKg, bmi),
     labs,
     comorbidityCodes,
     isDialysis: comorbidityCodes.includes('DIALYSIS'),
@@ -114,6 +157,7 @@ export async function previewProteinTarget(
       name: rule.name,
       version: rule.version,
       priority: rule.priority,
+      weightBasis: rule.weightBasis,
       conditions: rule.conditions,
     })),
   )
@@ -121,14 +165,24 @@ export async function previewProteinTarget(
   const current = await getActiveCalculation(patientId)
 
   const proteinFactor = selected?.proteinFactor ?? null
-  const proteinTargetGrams = proteinFactor === null ? null : round2(proteinFactor * facts.weightKg)
+  // น้ำหนักที่คูณขึ้นกับฐานที่กฎกำหนด ไม่ใช่น้ำหนักที่ชั่งได้เสมอไป
+  const reference = selected
+    ? resolveReferenceWeight(facts, selected.weightBasis)
+    : { weightKg: null, reason: undefined }
+  const proteinTargetGrams =
+    proteinFactor === null || reference.weightKg === null
+      ? null
+      : round2(proteinFactor * reference.weightKg)
 
   return {
     patientId,
     facts,
     evaluations,
     selected,
-    referenceWeightKg: facts.weightKg,
+    referenceWeightKg: reference.weightKg,
+    weightBasis: selected?.weightBasis ?? null,
+    weightBasisLabel: selected ? WEIGHT_BASIS_LABELS[selected.weightBasis] : null,
+    blockedReason: reference.reason ?? null,
     proteinFactor,
     proteinTargetGrams,
     effectiveFrom: formatDateOnly(effectiveFrom),

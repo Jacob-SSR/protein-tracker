@@ -12,6 +12,7 @@ type Row = {
   role: 'SUPER_ADMIN' | 'ADMIN' | 'USER'
   isActive: boolean
   hn: string | null
+  lastLoginAt: string | null
 }
 
 const ROLE_LABELS: Record<Row['role'], string> = {
@@ -167,7 +168,7 @@ export function UserManager({
       </Card>
 
       <Card title={`บัญชีทั้งหมด (${users.length})`}>
-        <Table head={['ชื่อผู้ใช้', 'ชื่อ-นามสกุล', 'ประเภท', 'สถานะ', '']}>
+        <Table head={['ชื่อผู้ใช้', 'ชื่อ-นามสกุล', 'ประเภท', 'สถานะ', 'เข้าใช้ล่าสุด', '']}>
           {users.map((user) => (
             <tr key={user.id} className="border-b border-line last:border-0">
               <td className="px-3 py-2 font-mono text-xs">{user.username}</td>
@@ -184,6 +185,11 @@ export function UserManager({
                 <Badge tone={user.isActive ? 'ok' : 'danger'}>
                   {user.isActive ? 'ใช้งาน' : 'ปิดใช้งาน'}
                 </Badge>
+              </td>
+              <td className="px-3 py-2 text-xs text-muted">
+                {user.lastLoginAt
+                  ? new Date(user.lastLoginAt).toLocaleString('th-TH')
+                  : 'ยังไม่เคยเข้า'}
               </td>
               <td className="px-3 py-2">
                 <div className="flex justify-end gap-2">

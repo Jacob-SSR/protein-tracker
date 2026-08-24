@@ -6,6 +6,7 @@ import { Alert, Badge, Button, Card, EmptyState, Field, Input, Select } from '@/
 import { request } from '@/lib/client/api'
 
 type ConditionType =
+  | 'GENDER'
   | 'EGFR'
   | 'ALBUMIN'
   | 'BUN'
@@ -20,6 +21,7 @@ type ConditionType =
   | 'DIALYSIS'
 
 type Operator = 'LT' | 'LTE' | 'GT' | 'GTE' | 'EQ' | 'NEQ'
+type WeightBasis = 'ACTUAL' | 'IBW' | 'ADJUSTED'
 
 type Condition = {
   conditionType: ConditionType
@@ -32,6 +34,7 @@ type Rule = {
   name: string
   description: string | null
   priority: number
+  weightBasis: WeightBasis
   version: number
   isActive: boolean
   proteinFactor: number
@@ -39,6 +42,7 @@ type Rule = {
 }
 
 const CONDITION_LABELS: Record<ConditionType, string> = {
+  GENDER: 'เพศ',
   EGFR: 'eGFR',
   ALBUMIN: 'Albumin',
   BUN: 'BUN',
@@ -62,6 +66,26 @@ const OPERATORS: { value: Operator; label: string }[] = [
   { value: 'NEQ', label: 'ไม่เท่ากับ (≠)' },
 ]
 
+const WEIGHT_BASIS_OPTIONS: { value: WeightBasis; label: string; hint: string }[] = [
+  { value: 'ACTUAL', label: 'น้ำหนักจริง', hint: 'คูณกับน้ำหนักที่ชั่งได้ล่าสุด' },
+  {
+    value: 'IBW',
+    label: 'น้ำหนักอุดมคติ (IBW)',
+    hint: 'สูตร Devine — ต้องมีส่วนสูงและเพศของผู้ป่วย',
+  },
+  {
+    value: 'ADJUSTED',
+    label: 'น้ำหนักปรับ (Adjusted BW)',
+    hint: 'BMI ≥ 30 ใช้ IBW + 0.25 × (จริง − IBW) ถ้าไม่ถึงใช้น้ำหนักจริง',
+  },
+]
+
+const GENDER_OPTIONS = [
+  { value: 'MALE', label: 'ชาย' },
+  { value: 'FEMALE', label: 'หญิง' },
+  { value: 'OTHER', label: 'อื่นๆ' },
+]
+
 const OPERATOR_SYMBOL: Record<Operator, string> = {
   LT: '<',
   LTE: '≤',
@@ -83,6 +107,11 @@ function describeCondition(condition: Condition): string {
       ? `ไม่มีโรคร่วม ${condition.value}`
       : `มีโรคร่วม ${condition.value}`
   }
+  if (condition.conditionType === 'GENDER') {
+    const label =
+      GENDER_OPTIONS.find((option) => option.value === condition.value)?.label ?? condition.value
+    return condition.operator === 'NEQ' ? `เพศไม่ใช่${label}` : `เพศ${label}`
+  }
   return `${CONDITION_LABELS[condition.conditionType]} ${OPERATOR_SYMBOL[condition.operator]} ${condition.value}`
 }
 
@@ -91,6 +120,7 @@ const emptyRule = (): Rule => ({
   name: '',
   description: null,
   priority: 100,
+  weightBasis: 'ACTUAL',
   version: 1,
   isActive: true,
   proteinFactor: 0.8,
@@ -131,6 +161,7 @@ export function RuleManager({
       name: draft.name.trim(),
       description: draft.description?.trim() || undefined,
       priority: draft.priority,
+      weightBasis: draft.weightBasis,
       proteinFactor: draft.proteinFactor,
       isActive: draft.isActive,
       conditions: draft.conditions,
@@ -239,10 +270,14 @@ export function RuleManager({
                           value:
                             event.target.value === 'DIALYSIS'
                               ? 'true'
-                              : event.target.value === 'COMORBIDITY'
-                                ? (comorbidities[0]?.code ?? '')
-                                : condition.value,
-                          operator: 'DIALYSIS' === event.target.value ? 'EQ' : condition.operator,
+                              : event.target.value === 'GENDER'
+                                ? 'MALE'
+                                : event.target.value === 'COMORBIDITY'
+                                  ? (comorbidities[0]?.code ?? '')
+                                  : condition.value,
+                          operator: ['DIALYSIS', 'GENDER'].includes(event.target.value)
+                            ? 'EQ'
+                            : condition.operator,
                         })
                       }
                     >
@@ -264,8 +299,7 @@ export function RuleManager({
                       }
                     >
                       {OPERATORS.filter((operator) =>
-                        condition.conditionType === 'DIALYSIS' ||
-                        condition.conditionType === 'COMORBIDITY'
+                        ['DIALYSIS', 'COMORBIDITY', 'GENDER'].includes(condition.conditionType)
                           ? operator.value === 'EQ' || operator.value === 'NEQ'
                           : true,
                       ).map((operator) => (
@@ -284,6 +318,17 @@ export function RuleManager({
                       >
                         <option value="true">ฟอกไต</option>
                         <option value="false">ไม่ฟอกไต</option>
+                      </Select>
+                    ) : condition.conditionType === 'GENDER' ? (
+                      <Select
+                        value={condition.value}
+                        onChange={(event) => updateCondition(index, { value: event.target.value })}
+                      >
+                        {GENDER_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
                       </Select>
                     ) : condition.conditionType === 'COMORBIDITY' ? (
                       <Select
@@ -369,7 +414,11 @@ export function RuleManager({
                   <p className="flex flex-wrap items-center gap-2 font-medium">
                     <span className="tabular text-muted">#{rule.priority}</span>
                     {rule.name}
-                    <Badge tone="brand">{rule.proteinFactor} g/kg</Badge>
+                    <Badge tone="brand">
+                      {rule.proteinFactor} g/kg ·{' '}
+                      {WEIGHT_BASIS_OPTIONS.find((option) => option.value === rule.weightBasis)
+                        ?.label ?? rule.weightBasis}
+                    </Badge>
                     <Badge tone={rule.isActive ? 'ok' : 'muted'}>
                       {rule.isActive ? 'ใช้งาน' : 'ปิดใช้งาน'}
                     </Badge>

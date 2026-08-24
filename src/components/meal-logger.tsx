@@ -12,6 +12,8 @@ type Summary = {
   targetGrams: number | null
   consumedGrams: number
   remainingGrams: number | null
+  percent: number | null
+  notification: { level: 'INFO' | 'WARN' | 'DANGER'; message: string } | null
   meals: {
     id: string
     mealType: string
@@ -229,6 +231,26 @@ export function MealLogger({
           </Button>
         </form>
       </Card>
+
+      {/* เตือนโควต้าทันทีหลังบันทึก ไม่ต้องกลับไปดูหน้าสรุป */}
+      {summary.notification ? (
+        <Alert
+          tone={
+            summary.notification.level === 'DANGER'
+              ? 'danger'
+              : summary.notification.level === 'WARN'
+                ? 'warn'
+                : 'brand'
+          }
+        >
+          {summary.notification.message}
+          {summary.remainingGrams !== null
+            ? summary.remainingGrams >= 0
+              ? ` — วันนี้เหลืออีก ${summary.remainingGrams} g`
+              : ` — เกินมาแล้ว ${Math.abs(summary.remainingGrams)} g`
+            : ''}
+        </Alert>
+      ) : null}
 
       <Card
         title={`สรุปวันที่ ${summary.date}`}

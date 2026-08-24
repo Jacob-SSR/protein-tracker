@@ -1,4 +1,4 @@
-import type { ConditionOperator, ConditionType, Prisma } from '@prisma/client'
+import type { ConditionOperator, ConditionType, Gender, Prisma, WeightBasis } from '@prisma/client'
 import { num } from '@/lib/decimal'
 
 /**
@@ -11,9 +11,15 @@ export type PatientFacts = {
   /** วันที่ใช้เป็นฐานในการดึงข้อมูล (YYYY-MM-DD) */
   asOf: string
   ageYears: number | null
+  gender: Gender | null
+  /** น้ำหนักที่ชั่งได้จริงล่าสุด */
   weightKg: number
   heightCm: number | null
   bmi: number | null
+  /** น้ำหนักอุดมคติ (Devine) — null เมื่อไม่มีส่วนสูงหรือไม่ระบุเพศชาย/หญิง */
+  ibwKg: number | null
+  /** BMI >= 30 ใช้ IBW + 0.25 x (จริง - IBW), ไม่ถึงใช้น้ำหนักจริง — null เมื่อคำนวณ IBW ไม่ได้ */
+  adjustedWeightKg: number | null
   /** ผลเลือดล่าสุดของแต่ละ labType (key เป็นตัวพิมพ์ใหญ่เสมอ) */
   labs: Record<string, { value: number; unit: string | null; measuredOn: string }>
   comorbidityCodes: string[]
@@ -33,6 +39,7 @@ export type RuleInput = {
   name: string
   version: number
   priority: number
+  weightBasis: WeightBasis
   conditions: RuleConditionInput[]
 }
 
@@ -50,6 +57,7 @@ export type RuleEvaluation = {
   ruleName: string
   ruleVersion: number
   priority: number
+  weightBasis: WeightBasis
   matched: boolean
   proteinFactor: number | null
   conditions: ConditionEvaluation[]
@@ -106,6 +114,19 @@ export function evaluateCondition(
     conditionType: condition.conditionType,
     operator: condition.operator,
     expected: condition.value,
+  }
+
+  if (condition.conditionType === 'GENDER') {
+    const expected = condition.value.toUpperCase()
+    const same = facts.gender === expected
+    if (!facts.gender) {
+      return { ...base, actual: null, matched: false, reason: 'ผู้ป่วยยังไม่ได้ระบุเพศ' }
+    }
+    return {
+      ...base,
+      actual: facts.gender,
+      matched: condition.operator === 'NEQ' ? !same : same,
+    }
   }
 
   if (condition.conditionType === 'COMORBIDITY') {
@@ -165,6 +186,7 @@ export function evaluateRule(facts: PatientFacts, rule: RuleInput): RuleEvaluati
     ruleName: rule.name,
     ruleVersion: rule.version,
     priority: rule.priority,
+    weightBasis: rule.weightBasis,
     matched,
     proteinFactor: conditions.length > 0 ? num(conditions[0].proteinFactor) : null,
     conditions: results,
@@ -180,4 +202,27 @@ export function selectRule(facts: PatientFacts, rules: RuleInput[]) {
     evaluations,
     selected: evaluations.find((evaluation) => evaluation.matched) ?? null,
   }
+}
+
+/** น้ำหนักที่ต้องเอาไปคูณ ตามฐานที่กฎกำหนด — null = ข้อมูลไม่พอคำนวณฐานนั้น */
+export function resolveReferenceWeight(
+  facts: PatientFacts,
+  weightBasis: WeightBasis,
+): { weightKg: number | null; reason?: string } {
+  if (weightBasis === 'ACTUAL') return { weightKg: facts.weightKg }
+
+  if (facts.ibwKg === null) {
+    return {
+      weightKg: null,
+      reason: 'กฎนี้ใช้น้ำหนักอุดมคติ ต้องมีทั้งส่วนสูงและเพศ (ชาย/หญิง) ของผู้ป่วยก่อน',
+    }
+  }
+
+  return { weightKg: weightBasis === 'IBW' ? facts.ibwKg : facts.adjustedWeightKg }
+}
+
+export const WEIGHT_BASIS_LABELS: Record<WeightBasis, string> = {
+  ACTUAL: 'น้ำหนักจริง',
+  IBW: 'น้ำหนักอุดมคติ (IBW)',
+  ADJUSTED: 'น้ำหนักปรับ (Adjusted BW)',
 }

@@ -14,6 +14,7 @@ export default async function AdminUsersPage() {
       fullName: true,
       role: true,
       isActive: true,
+      lastLoginAt: true,
       patient: { select: { hn: true } },
     },
   })
@@ -31,7 +32,11 @@ export default async function AdminUsersPage() {
       <UserManager
         currentUserId={session.userId}
         canManageAdmins={session.role === 'SUPER_ADMIN'}
-        users={users.map((user) => ({ ...user, hn: user.patient?.hn ?? null }))}
+        users={users.map((user) => ({
+          ...user,
+          hn: user.patient?.hn ?? null,
+          lastLoginAt: user.lastLoginAt?.toISOString() ?? null,
+        }))}
       />
     </div>
   )

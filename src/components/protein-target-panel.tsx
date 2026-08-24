@@ -15,7 +15,9 @@ type Condition = {
 }
 
 type Preview = {
-  referenceWeightKg: number
+  referenceWeightKg: number | null
+  weightBasisLabel: string | null
+  blockedReason: string | null
   proteinFactor: number | null
   proteinTargetGrams: number | null
   effectiveFrom: string
@@ -121,11 +123,14 @@ export function ProteinTargetPanel({ patientId }: { patientId: string }) {
               <div className="ml-auto text-right text-sm text-muted">
                 <p>{preview.selected?.ruleName ?? 'ไม่มีกฎที่ตรงกับข้อมูลผู้ป่วย'}</p>
                 <p className="tabular">
-                  {preview.proteinFactor ?? '—'} g/kg × {preview.referenceWeightKg} kg
+                  {preview.proteinFactor ?? '—'} g/kg × {preview.referenceWeightKg ?? '—'} kg
                 </p>
+                {preview.weightBasisLabel ? <p>ฐาน: {preview.weightBasisLabel}</p> : null}
                 <p>มีผล {preview.effectiveFrom}</p>
               </div>
             </div>
+
+            {preview.blockedReason ? <Alert tone="warn">{preview.blockedReason}</Alert> : null}
 
             <details className="text-sm">
               <summary className="cursor-pointer text-muted">

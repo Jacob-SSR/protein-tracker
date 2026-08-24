@@ -1,6 +1,6 @@
 import type { MealType } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
-import { addDays, eachDay, formatDateOnly, startOfWeek } from '@/lib/date'
+import { addDays, eachDay, formatDateOnly, parseDateOnly, startOfWeek, today } from '@/lib/date'
 import { num, round2 } from '@/lib/decimal'
 import { getNotifyThresholds, type NotifyThreshold } from '@/lib/settings'
 import { getCalculationForDate } from '@/lib/protein/calculator'
@@ -80,12 +80,80 @@ export async function getDailySummary(patientId: string, date: Date): Promise<Da
   }
 }
 
+export type WeeklyVerdict = {
+  level: 'OK' | 'WARN' | 'DANGER'
+  headline: string
+  detail: string
+}
+
 export type WeeklySummary = {
   from: string
   to: string
   days: { date: string; targetGrams: number | null; consumedGrams: number }[]
   averageConsumedGrams: number
   daysOverTarget: number
+  daysUnderTarget: number
+  daysWithoutRecord: number
+  daysEvaluated: number
+  verdict: WeeklyVerdict
+}
+
+/**
+ * ตัดสินว่าสัปดาห์นี้ทานเหมาะสมหรือไม่
+ * นับเฉพาะวันที่ผ่านมาแล้วและมีเป้าหมายกำกับ วันในอนาคตของสัปดาห์ไม่นับ
+ * ผู้ป่วย CKD ทานเกินเป็นความเสี่ยงหลัก แต่ทานน้อยเกินไปก็เสี่ยงขาดสารอาหาร จึงเตือนทั้งสองทาง
+ */
+function judgeWeek(input: {
+  daysEvaluated: number
+  daysOverTarget: number
+  daysUnderTarget: number
+  daysWithoutRecord: number
+}): WeeklyVerdict {
+  if (input.daysEvaluated === 0) {
+    return {
+      level: 'WARN',
+      headline: 'ยังประเมินไม่ได้',
+      detail: 'สัปดาห์นี้ยังไม่มีวันที่มีทั้งเป้าหมายและข้อมูลการทาน',
+    }
+  }
+
+  if (input.daysOverTarget >= 3) {
+    return {
+      level: 'DANGER',
+      headline: 'ทานเกินเป้าหมายบ่อยเกินไป',
+      detail: `เกินเป้าหมาย ${input.daysOverTarget} จาก ${input.daysEvaluated} วัน ควรปรึกษาเจ้าหน้าที่เพื่อปรับการทาน`,
+    }
+  }
+
+  if (input.daysOverTarget > 0) {
+    return {
+      level: 'WARN',
+      headline: 'เกินเป้าหมายบางวัน',
+      detail: `เกินเป้าหมาย ${input.daysOverTarget} จาก ${input.daysEvaluated} วัน ที่เหลืออยู่ในเกณฑ์`,
+    }
+  }
+
+  if (input.daysUnderTarget >= 3) {
+    return {
+      level: 'WARN',
+      headline: 'ทานน้อยกว่าเป้าหมายหลายวัน',
+      detail: `ได้โปรตีนต่ำกว่า 70% ของเป้าหมาย ${input.daysUnderTarget} จาก ${input.daysEvaluated} วัน เสี่ยงขาดสารอาหาร`,
+    }
+  }
+
+  if (input.daysWithoutRecord >= 3) {
+    return {
+      level: 'WARN',
+      headline: 'บันทึกไม่ครบ',
+      detail: `มี ${input.daysWithoutRecord} วันที่ไม่ได้บันทึกอาหารเลย ผลประเมินอาจไม่ตรงความจริง`,
+    }
+  }
+
+  return {
+    level: 'OK',
+    headline: 'การทานอยู่ในเกณฑ์เหมาะสม',
+    detail: `อยู่ในเป้าหมายครบทั้ง ${input.daysEvaluated} วันที่ประเมินได้`,
+  }
 }
 
 export async function getWeeklySummary(
@@ -130,14 +198,34 @@ export async function getWeeklySummary(
   })
 
   const totalConsumed = days.reduce((sum, day) => sum + day.consumedGrams, 0)
+  const currentDay = today()
+
+  // ประเมินเฉพาะวันที่ผ่านมาแล้วและมีเป้าหมายกำกับ
+  const evaluated = days.filter(
+    (day) => day.targetGrams !== null && parseDateOnly(day.date) <= currentDay,
+  )
+  const daysOverTarget = evaluated.filter((day) => day.consumedGrams > day.targetGrams!).length
+  const daysUnderTarget = evaluated.filter(
+    (day) => day.consumedGrams > 0 && day.consumedGrams < day.targetGrams! * 0.7,
+  ).length
+  const daysWithoutRecord = days.filter(
+    (day) => day.consumedGrams === 0 && parseDateOnly(day.date) <= currentDay,
+  ).length
 
   return {
     from: formatDateOnly(from),
     to: formatDateOnly(to),
     days,
     averageConsumedGrams: round2(totalConsumed / days.length),
-    daysOverTarget: days.filter(
-      (day) => day.targetGrams !== null && day.consumedGrams > day.targetGrams,
-    ).length,
+    daysOverTarget,
+    daysUnderTarget,
+    daysWithoutRecord,
+    daysEvaluated: evaluated.length,
+    verdict: judgeWeek({
+      daysEvaluated: evaluated.length,
+      daysOverTarget,
+      daysUnderTarget,
+      daysWithoutRecord,
+    }),
   }
 }

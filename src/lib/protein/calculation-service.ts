@@ -39,11 +39,20 @@ export async function confirmProteinTarget(input: ConfirmInput) {
   const selected = preview.selected
   const proteinFactor = preview.proteinFactor
   const proteinTargetGrams = preview.proteinTargetGrams
+  const referenceWeightKg = preview.referenceWeightKg
 
-  if (!selected || proteinFactor === null || proteinTargetGrams === null) {
+  if (!selected || proteinFactor === null) {
     throw badRequest(
       'NO_MATCHING_RULE',
       'ไม่มีกฎคำนวณโปรตีนข้อไหนตรงกับข้อมูลผู้ป่วยรายนี้ กรุณาตรวจสอบกฎหรือข้อมูลสุขภาพ',
+    )
+  }
+
+  // กฎ match แล้วแต่ข้อมูลไม่พอคำนวณฐานน้ำหนักที่กฎกำหนด (เช่น ใช้ IBW แต่ไม่มีส่วนสูง)
+  if (proteinTargetGrams === null || referenceWeightKg === null) {
+    throw badRequest(
+      'MISSING_WEIGHT_BASIS_DATA',
+      preview.blockedReason ?? 'ข้อมูลไม่พอสำหรับคำนวณเป้าหมาย',
     )
   }
 
@@ -81,7 +90,8 @@ export async function confirmProteinTarget(input: ConfirmInput) {
         ruleId: selected.ruleId,
         ruleVersion: selected.ruleVersion,
         ruleNameSnapshot: selected.ruleName,
-        referenceWeightKg: toDecimal(preview.referenceWeightKg),
+        weightBasis: selected.weightBasis,
+        referenceWeightKg: toDecimal(referenceWeightKg),
         proteinFactor: toDecimal(proteinFactor),
         proteinTargetGrams: toDecimal(proteinTargetGrams),
         inputSnapshot: {
@@ -120,7 +130,8 @@ export async function confirmProteinTarget(input: ConfirmInput) {
       id: created.id,
       proteinTargetGrams,
       proteinFactor,
-      referenceWeightKg: preview.referenceWeightKg,
+      referenceWeightKg,
+      weightBasis: selected.weightBasis,
       effectiveFrom: formatDateOnly(effectiveFrom),
       previousId: active?.id ?? null,
     }

@@ -32,6 +32,7 @@ export async function PUT(request: Request, { params }: Params) {
           name: body.name,
           description: body.description || null,
           priority: body.priority,
+          weightBasis: body.weightBasis,
           isActive: body.isActive,
           version: { increment: 1 },
           conditions: {
@@ -51,6 +52,7 @@ export async function PUT(request: Request, { params }: Params) {
         oldValue: {
           name: existing.name,
           priority: existing.priority,
+          weightBasis: existing.weightBasis,
           version: existing.version,
           isActive: existing.isActive,
           proteinFactor: existing.conditions[0] ? num(existing.conditions[0].proteinFactor) : null,

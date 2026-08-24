@@ -31,6 +31,7 @@ enum Gender {
 }
 
 enum ConditionType {
+  GENDER
   EGFR
   ALBUMIN
   BUN
@@ -52,6 +53,16 @@ enum ConditionOperator {
   GTE
   EQ
   NEQ
+}
+
+/// ฐานน้ำหนักที่ใช้คูณกับ proteinFactor — เลือกได้ต่อกฎ
+/// ACTUAL   = น้ำหนักที่ชั่งได้จริง
+/// IBW      = น้ำหนักอุดมคติ (Devine) ต้องมีส่วนสูง + เพศ
+/// ADJUSTED = ถ้า BMI >= 30 ใช้ IBW + 0.25 x (จริง - IBW) ถ้าไม่ถึงใช้น้ำหนักจริง
+enum WeightBasis {
+  ACTUAL
+  IBW
+  ADJUSTED
 }
 
 enum FoodStatus {
@@ -85,15 +96,16 @@ enum SettingValueType {
 // ---------------------------------------------------------------- identity
 
 model User {
-  id           String   @id @default(cuid())
-  username     String   @unique
-  email        String?  @unique
+  id           String    @id @default(cuid())
+  username     String    @unique
+  email        String?   @unique
   passwordHash String
   fullName     String
-  role         Role     @default(USER)
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  role         Role      @default(USER)
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   patient Patient?
 
@@ -194,16 +206,17 @@ model PatientComorbidity {
 // ---------------------------------------------------------------- protein rules
 
 model ProteinRule {
-  id          String   @id @default(cuid())
+  id          String      @id @default(cuid())
   name        String
   description String?
   // priority น้อย = ตรวจก่อน กฎแรกที่ match ทุกเงื่อนไขคือกฎที่ใช้
-  priority    Int      @default(100)
-  version     Int      @default(1)
-  isActive    Boolean  @default(true)
+  priority    Int         @default(100)
+  weightBasis WeightBasis @default(ACTUAL)
+  version     Int         @default(1)
+  isActive    Boolean     @default(true)
   createdById String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 
   createdBy  User                   @relation(fields: [createdById], references: [id])
   conditions ProteinRuleCondition[]
@@ -229,22 +242,25 @@ model ProteinRuleCondition {
 
 // Snapshot ของผลการคำนวณ — ห้าม update ค่าเดิม ปิดแถวเก่าด้วย effectiveTo แล้วสร้างแถวใหม่เสมอ
 model ProteinCalculation {
-  id                 String    @id @default(cuid())
+  id                 String      @id @default(cuid())
   patientId          String
   ruleId             String?
   ruleVersion        Int?
   ruleNameSnapshot   String?
-  referenceWeightKg  Decimal   @db.Decimal(6, 2)
-  proteinFactor      Decimal   @db.Decimal(5, 3)
-  proteinTargetGrams Decimal   @db.Decimal(7, 2)
+  /// ฐานน้ำหนักที่กฎกำหนดไว้ ณ ตอนคำนวณ — เก็บไว้เพื่ออธิบายผลย้อนหลังได้
+  weightBasis        WeightBasis @default(ACTUAL)
+  /// น้ำหนักที่ถูกนำไปคูณจริง (ตาม weightBasis) ไม่ใช่น้ำหนักที่ชั่งได้เสมอไป
+  referenceWeightKg  Decimal     @db.Decimal(6, 2)
+  proteinFactor      Decimal     @db.Decimal(5, 3)
+  proteinTargetGrams Decimal     @db.Decimal(7, 2)
   // snapshot ของ input ทั้งหมดที่ใช้คำนวณ (weight, labs, comorbidities, rule) — อ่าน/เขียนทั้งก้อน
   inputSnapshot      Json
   note               String?
-  effectiveFrom      DateTime  @db.Date
-  effectiveTo        DateTime? @db.Date
+  effectiveFrom      DateTime    @db.Date
+  effectiveTo        DateTime?   @db.Date
   confirmedById      String
-  confirmedAt        DateTime  @default(now())
-  createdAt          DateTime  @default(now())
+  confirmedAt        DateTime    @default(now())
+  createdAt          DateTime    @default(now())
 
   patient     Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
   confirmedBy User    @relation(fields: [confirmedById], references: [id])
@@ -280,14 +296,14 @@ model Food {
 
 // หนึ่งอาหารมีได้หลายหน่วย เช่น อกไก่ = 100 g / 1 ชิ้น / 1 จาน
 model FoodUnit {
-  id           String  @id @default(cuid())
-  foodId       String
-  unitName     String
-  gramsPerUnit Decimal? @db.Decimal(8, 2)
+  id            String   @id @default(cuid())
+  foodId        String
+  unitName      String
+  gramsPerUnit  Decimal? @db.Decimal(8, 2)
   // g โปรตีน ต่อ 1 หน่วยนี้
-  proteinAmount Decimal @db.Decimal(7, 2)
-  isDefault     Boolean @default(false)
-  sortOrder     Int     @default(0)
+  proteinAmount Decimal  @db.Decimal(7, 2)
+  isDefault     Boolean  @default(false)
+  sortOrder     Int      @default(0)
 
   food      Food       @relation(fields: [foodId], references: [id], onDelete: Cascade)
   mealItems MealItem[]
