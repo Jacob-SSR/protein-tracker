@@ -11,6 +11,8 @@ export const SETTING_KEYS = {
   /** ห้ามบันทึกล่วงหน้าเกินกี่วัน (0 = ห้ามล่วงหน้าเลย) */
   MEAL_FUTURE_DAYS: 'meal_future_days',
   NOTIFY_THRESHOLDS: 'notify_thresholds',
+  /** เปิดให้ผู้ป่วยล็อกอินเข้าดูข้อมูลตัวเองได้หรือไม่ — ปิดไว้ = ระบบสำหรับเจ้าหน้าที่ล้วน */
+  PATIENT_PORTAL_ENABLED: 'patient_portal_enabled',
 } as const
 
 export const SETTING_DEFAULTS: Record<
@@ -26,6 +28,11 @@ export const SETTING_DEFAULTS: Record<
     value: '0',
     valueType: 'INT',
     description: 'บันทึกอาหารล่วงหน้าได้กี่วัน (0 = ห้ามล่วงหน้า)',
+  },
+  [SETTING_KEYS.PATIENT_PORTAL_ENABLED]: {
+    value: 'false',
+    valueType: 'BOOLEAN',
+    description: 'เปิดให้ผู้ป่วยล็อกอินเข้าดูข้อมูลและบันทึกอาหารเองได้',
   },
   [SETTING_KEYS.NOTIFY_THRESHOLDS]: {
     value: JSON.stringify([
@@ -79,6 +86,13 @@ export async function getMealFutureDays(): Promise<number> {
   return getIntSetting(SETTING_KEYS.MEAL_FUTURE_DAYS)
 }
 
+export async function isPatientPortalEnabled(): Promise<boolean> {
+  const row = await prisma.systemSetting.findUnique({
+    where: { key: SETTING_KEYS.PATIENT_PORTAL_ENABLED },
+  })
+  return (row?.value ?? SETTING_DEFAULTS[SETTING_KEYS.PATIENT_PORTAL_ENABLED].value) === 'true'
+}
+
 export async function getNotifyThresholds(): Promise<NotifyThreshold[]> {
   try {
     const parsed = JSON.parse(await readRaw(SETTING_KEYS.NOTIFY_THRESHOLDS))
@@ -103,6 +117,11 @@ export function validateKnownSetting(key: string, value: string) {
     if (!Number.isInteger(days) || days < 0 || days > 30) {
       throw new Error('ต้องเป็นจำนวนวัน 0-30')
     }
+    return
+  }
+
+  if (key === SETTING_KEYS.PATIENT_PORTAL_ENABLED) {
+    if (value !== 'true' && value !== 'false') throw new Error('ต้องเป็น true หรือ false')
     return
   }
 

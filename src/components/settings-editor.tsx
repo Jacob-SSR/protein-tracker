@@ -43,19 +43,99 @@ export function SettingsEditor({
   backdateDays,
   futureDays,
   thresholds,
+  portalEnabled,
   updatedBy,
 }: {
   backdateDays: number
   futureDays: number
   thresholds: Threshold[]
+  portalEnabled: boolean
   updatedBy: Meta
 }) {
   return (
     <div className="flex flex-col gap-4">
+      <PortalCard initial={portalEnabled} meta={updatedBy['patient_portal_enabled']} />
       <BackdateCard initial={backdateDays} meta={updatedBy['meal_backdate_days']} />
       <FutureCard initial={futureDays} meta={updatedBy['meal_future_days']} />
       <ThresholdCard initial={thresholds} meta={updatedBy['notify_thresholds']} />
     </div>
+  )
+}
+
+/**
+ * เปิด/ปิดส่วนของผู้ป่วยทั้งก้อน
+ * ปิดไว้ = ระบบสำหรับเจ้าหน้าที่ล้วน ผู้ป่วยไม่ต้องมีบัญชี เจ้าหน้าที่บันทึกให้ทั้งหมด
+ */
+function PortalCard({ initial, meta }: { initial: boolean; meta?: Meta[string] }) {
+  const router = useRouter()
+  const [enabled, setEnabled] = useState(initial)
+  const [state, setState] = useState<{ error?: string; saved?: boolean }>({})
+  const [pending, setPending] = useState(false)
+
+  async function save(next: boolean) {
+    setState({})
+    setPending(true)
+    try {
+      await saveSetting('patient_portal_enabled', String(next))
+      setEnabled(next)
+      setState({ saved: true })
+      router.refresh()
+    } catch (cause) {
+      setState({ error: (cause as Error).message })
+    } finally {
+      setPending(false)
+    }
+  }
+
+  return (
+    <Card
+      title="ส่วนของผู้ป่วย"
+      description="เปิดแล้วผู้ป่วยจะล็อกอินเข้ามาดูข้อมูลและบันทึกอาหารเองได้"
+    >
+      <div className="flex flex-col gap-3">
+        <div className="grid gap-2 sm:grid-cols-2">
+          {[
+            {
+              value: false,
+              label: 'ปิด — เจ้าหน้าที่ใช้อย่างเดียว',
+              hint: 'ผู้ป่วยไม่ต้องมีบัญชี เจ้าหน้าที่บันทึกข้อมูลและอาหารให้ทั้งหมด',
+            },
+            {
+              value: true,
+              label: 'เปิด — ผู้ป่วยเข้าเองได้',
+              hint: 'ต้องไปเปิดสิทธิ์ให้ผู้ป่วยเป็นรายคนที่หน้าผู้ป่วยอีกที',
+            },
+          ].map((option) => (
+            <button
+              key={String(option.value)}
+              type="button"
+              disabled={pending}
+              onClick={() => save(option.value)}
+              className={`rounded-lg border p-3 text-left text-sm transition disabled:opacity-50 ${
+                enabled === option.value
+                  ? 'border-brand bg-brand-soft'
+                  : 'border-line bg-surface hover:bg-background'
+              }`}
+            >
+              <span className="block font-medium">{option.label}</span>
+              <span className="block text-xs text-muted">{option.hint}</span>
+            </button>
+          ))}
+        </div>
+
+        {enabled ? (
+          <Alert tone="warn">เปิดอยู่ — ผู้ป่วยที่ได้รับสิทธิ์จะเห็นข้อมูลสุขภาพของตัวเองได้</Alert>
+        ) : (
+          <p className="text-sm text-muted">
+            ปิดอยู่ — บัญชีผู้ป่วยที่มีอยู่จะล็อกอินไม่ได้จนกว่าจะเปิดใหม่ ข้อมูลไม่หาย
+          </p>
+        )}
+
+        {state.error ? <Alert>{state.error}</Alert> : null}
+        {state.saved ? <Alert tone="ok">บันทึกแล้ว</Alert> : null}
+        <UpdatedNote meta={meta} />
+      </div>
+    </Card>
   )
 }
 

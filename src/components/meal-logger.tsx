@@ -38,10 +38,14 @@ const MEAL_TYPES = [
 export function MealLogger({
   initialDate,
   initialSummary,
+  /** ตั้งค่าเมื่อเจ้าหน้าที่บันทึกแทนผู้ป่วย — ฝั่งผู้ป่วยเองไม่ต้องส่ง (API บังคับเป็นของตัวเองอยู่แล้ว) */
+  patientId,
 }: {
   initialDate: string
   initialSummary: Summary
+  patientId?: string
 }) {
+  const scope = patientId ? `&patientId=${patientId}` : ''
   const [date, setDate] = useState(initialDate)
   const [mealType, setMealType] = useState('BREAKFAST')
   const [query, setQuery] = useState('')
@@ -73,7 +77,9 @@ export function MealLogger({
 
   async function changeDate(nextDate: string) {
     setDate(nextDate)
-    const data = await run(() => request<{ summary: Summary }>(`/api/meals?date=${nextDate}`))
+    const data = await run(() =>
+      request<{ summary: Summary }>(`/api/meals?date=${nextDate}${scope}`),
+    )
     if (data) setSummary(data.summary)
   }
 
@@ -120,6 +126,7 @@ export function MealLogger({
           mealType,
           foodUnitId: unitId,
           quantity: Number(quantity),
+          patientId,
         },
       }),
     )

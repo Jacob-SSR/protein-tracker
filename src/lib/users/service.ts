@@ -2,7 +2,6 @@ import { Prisma, type Role } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
 import { writeAudit } from '@/lib/audit'
 import { hashPassword } from '@/lib/auth/password'
-import { parseDateOnly } from '@/lib/date'
 import { conflict, forbidden } from '@/lib/errors'
 import type { AccessTokenPayload } from '@/lib/auth/jwt'
 import { isSuperAdmin } from '@/lib/permissions'
@@ -20,15 +19,6 @@ export type CreateUserInput = {
   fullName: string
   email?: string | null
   role: Role
-  /** จำเป็นเมื่อ role = USER */
-  patient?: {
-    hn: string
-    birthDate?: string | null
-    gender?: 'MALE' | 'FEMALE' | 'OTHER' | null
-    /** สร้างพร้อมน้ำหนักตั้งต้นได้เลย จะได้คำนวณเป้าหมายได้ทันที */
-    weightKg?: number | null
-    heightCm?: number | null
-  } | null
 }
 
 export async function createUser(
@@ -39,7 +29,6 @@ export async function createUser(
   assertCanManageRole(session, input.role)
 
   const passwordHash = await hashPassword(input.password)
-  const measuredOn = parseDateOnly(new Date().toISOString().slice(0, 10))
 
   try {
     return await prisma.$transaction(async (tx) => {
@@ -50,44 +39,15 @@ export async function createUser(
           fullName: input.fullName,
           role: input.role,
           passwordHash,
-          patient:
-            input.role === 'USER' && input.patient
-              ? {
-                  create: {
-                    hn: input.patient.hn,
-                    birthDate: input.patient.birthDate
-                      ? parseDateOnly(input.patient.birthDate)
-                      : null,
-                    gender: input.patient.gender ?? null,
-                  },
-                }
-              : undefined,
         },
-        include: { patient: true },
       })
-
-      if (user.patient && input.patient?.weightKg) {
-        await tx.patientMeasurement.create({
-          data: {
-            patientId: user.patient.id,
-            measuredOn,
-            weightKg: new Prisma.Decimal(input.patient.weightKg),
-            heightCm: input.patient.heightCm ? new Prisma.Decimal(input.patient.heightCm) : null,
-            recordedById: session.userId,
-          },
-        })
-      }
 
       await writeAudit(tx, {
         actorId: session.userId,
         action: 'USER_CREATE',
         targetType: 'User',
         targetId: user.id,
-        newValue: {
-          username: user.username,
-          role: user.role,
-          patientId: user.patient?.id ?? null,
-        },
+        newValue: { username: user.username, role: user.role },
         ...meta,
       })
 
@@ -95,11 +55,7 @@ export async function createUser(
     })
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-      const target = String(error.meta?.target ?? '')
-      throw conflict(
-        'DUPLICATE',
-        target.includes('hn') ? 'HN นี้มีอยู่ในระบบแล้ว' : 'ชื่อผู้ใช้หรืออีเมลนี้ถูกใช้ไปแล้ว',
-      )
+      throw conflict('DUPLICATE', 'ชื่อผู้ใช้หรืออีเมลนี้ถูกใช้ไปแล้ว')
     }
     throw error
   }

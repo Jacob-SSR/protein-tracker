@@ -6,6 +6,11 @@ import { num, optionalNum } from '@/lib/decimal'
 import { Badge, Card, EmptyState, PageHeader, Table } from '@/components/ui'
 import { HealthDataForms } from '@/components/health-data-forms'
 import { ProteinTargetPanel } from '@/components/protein-target-panel'
+import { MealLogger } from '@/components/meal-logger'
+import { PatientAccountPanel } from '@/components/patient-account-panel'
+import { getDailySummary } from '@/lib/meals/summary'
+import { isPatientPortalEnabled } from '@/lib/settings'
+import { formatDateOnly as toDateString, today } from '@/lib/date'
 
 const GENDER_LABELS = { MALE: 'ชาย', FEMALE: 'หญิง', OTHER: 'อื่นๆ' }
 
@@ -13,11 +18,11 @@ export default async function AdminPatientPage({ params }: { params: Promise<{ i
   await requireAdminPage()
   const { id } = await params
 
-  const [patient, comorbidities] = await Promise.all([
+  const [patient, comorbidities, portalEnabled] = await Promise.all([
     prisma.patient.findUnique({
       where: { id },
       include: {
-        user: { select: { fullName: true, username: true } },
+        user: { select: { username: true } },
         measurements: { orderBy: { measuredOn: 'desc' }, take: 10 },
         labs: {
           orderBy: [{ measuredOn: 'desc' }, { createdAt: 'desc' }],
@@ -34,14 +39,18 @@ export default async function AdminPatientPage({ params }: { params: Promise<{ i
       where: { isActive: true },
       orderBy: { code: 'asc' },
     }),
+    isPatientPortalEnabled(),
   ])
 
   if (!patient) notFound()
 
+  const date = today()
+  const summary = await getDailySummary(patient.id, date)
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title={patient.user.fullName}
+        title={patient.fullName}
         description={`HN ${patient.hn} · ${patient.birthDate ? `เกิด ${formatDateOnly(patient.birthDate)}` : 'ไม่ระบุวันเกิด'}${
           patient.gender ? ` · ${GENDER_LABELS[patient.gender]}` : ''
         }`}
@@ -49,11 +58,24 @@ export default async function AdminPatientPage({ params }: { params: Promise<{ i
 
       <ProteinTargetPanel patientId={patient.id} />
 
+      <div>
+        <h2 className="mb-2 font-medium">บันทึกอาหารให้ผู้ป่วย</h2>
+        <MealLogger
+          patientId={patient.id}
+          initialDate={toDateString(date)}
+          initialSummary={summary}
+        />
+      </div>
+
       <HealthDataForms
         patientId={patient.id}
         comorbidities={comorbidities}
         selectedCodes={patient.comorbidities.map((row) => row.comorbidity.code)}
       />
+
+      {portalEnabled ? (
+        <PatientAccountPanel patientId={patient.id} username={patient.user?.username ?? null} />
+      ) : null}
 
       <Card title="ประวัติน้ำหนัก / ส่วนสูง">
         {patient.measurements.length === 0 ? (

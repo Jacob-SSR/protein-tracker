@@ -126,8 +126,11 @@ model User {
 
 model Patient {
   id        String    @id @default(cuid())
-  userId    String    @unique
+  /// ชื่อผู้ป่วยอยู่ที่นี่ ไม่ใช่ที่ User — ผู้ป่วยไม่จำเป็นต้องมีบัญชีเข้าระบบ
+  fullName  String
   hn        String    @unique
+  /// มีค่าเฉพาะผู้ป่วยที่เปิดสิทธิ์ให้เข้าระบบเองแล้ว (ดู SystemSetting patient_portal_enabled)
+  userId    String?   @unique
   birthDate DateTime? @db.Date
   gender    Gender?
   note      String?
@@ -135,7 +138,7 @@ model Patient {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   measurements  PatientMeasurement[]
   labs          PatientLab[]

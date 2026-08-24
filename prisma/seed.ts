@@ -32,6 +32,12 @@ const SETTINGS: {
     description: 'บันทึกอาหารล่วงหน้าได้กี่วัน (0 = ห้ามล่วงหน้า)',
   },
   {
+    key: 'patient_portal_enabled',
+    value: 'false',
+    valueType: 'BOOLEAN',
+    description: 'เปิดให้ผู้ป่วยล็อกอินเข้าดูข้อมูลและบันทึกอาหารเองได้',
+  },
+  {
     key: 'notify_thresholds',
     value: JSON.stringify([
       {

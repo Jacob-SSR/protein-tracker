@@ -21,7 +21,8 @@ export async function GET(_request: Request, { params }: Params) {
           hn: true,
           birthDate: true,
           gender: true,
-          user: { select: { fullName: true } },
+          fullName: true,
+          user: { select: { username: true } },
           measurements: { orderBy: { measuredOn: 'desc' }, take: 10 },
           labs: { orderBy: { measuredOn: 'desc' }, take: 30 },
           comorbidities: {
@@ -37,7 +38,7 @@ export async function GET(_request: Request, { params }: Params) {
       patient: {
         id: patient.id,
         hn: patient.hn,
-        fullName: patient.user.fullName,
+        fullName: patient.fullName,
         birthDate: patient.birthDate ? formatDateOnly(patient.birthDate) : null,
         gender: patient.gender,
         measurements: patient.measurements.map((row) => ({

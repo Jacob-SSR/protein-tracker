@@ -6,6 +6,7 @@ import { signAccessToken } from '@/lib/auth/jwt'
 import { verifyPassword } from '@/lib/auth/password'
 import { setSessionCookie } from '@/lib/auth/session'
 import { AppError } from '@/lib/errors'
+import { isPatientPortalEnabled } from '@/lib/settings'
 
 const bodySchema = z.object({
   username: z.string().min(1),
@@ -25,6 +26,15 @@ export async function POST(request: Request) {
     const invalid = new AppError(401, 'INVALID_CREDENTIALS', 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง')
     if (!user || !user.isActive) throw invalid
     if (!(await verifyPassword(password, user.passwordHash))) throw invalid
+
+    // ระบบนี้เป็นของเจ้าหน้าที่ ถ้ายังไม่เปิดส่วนผู้ป่วย บัญชีผู้ป่วยเข้าไม่ได้
+    if (user.role === 'USER' && !(await isPatientPortalEnabled())) {
+      throw new AppError(
+        403,
+        'PATIENT_PORTAL_DISABLED',
+        'ขณะนี้ยังไม่เปิดให้ผู้ป่วยเข้าใช้งานด้วยตนเอง กรุณาติดต่อเจ้าหน้าที่',
+      )
+    }
 
     const token = await signAccessToken({
       userId: user.id,

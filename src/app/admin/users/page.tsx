@@ -25,8 +25,8 @@ export default async function AdminUsersPage() {
         title="ผู้ใช้"
         description={
           session.role === 'SUPER_ADMIN'
-            ? 'สร้างและจัดการบัญชีทั้งหมด'
-            : 'สร้างและจัดการบัญชีผู้ป่วย — บัญชีระดับผู้ดูแลต้องให้ SUPER_ADMIN จัดการ'
+            ? 'บัญชีสำหรับเข้าใช้ระบบทั้งหมด'
+            : 'ดูได้ทุกบัญชี — สร้างและแก้ไขบัญชีระดับผู้ดูแลต้องให้ SUPER_ADMIN ทำ'
         }
       />
       <UserManager

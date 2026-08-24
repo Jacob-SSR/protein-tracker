@@ -4,7 +4,6 @@ import { prisma } from '@/lib/db/prisma'
 import { requestMeta } from '@/lib/audit'
 import { ADMIN_ROLES } from '@/lib/permissions'
 import { createUser } from '@/lib/users/service'
-import { badRequest } from '@/lib/errors'
 
 const querySchema = z.object({
   q: z.string().trim().optional(),
@@ -55,26 +54,15 @@ const createSchema = z.object({
   password: z.string().min(8).max(72),
   fullName: z.string().trim().min(1).max(200),
   email: z.email().optional().or(z.literal('')),
-  role: z.enum(['SUPER_ADMIN', 'ADMIN', 'USER']),
-  patient: z
-    .object({
-      hn: z.string().trim().min(1).max(50),
-      birthDate: z.string().optional().or(z.literal('')),
-      gender: z.enum(['MALE', 'FEMALE', 'OTHER']).optional(),
-      weightKg: z.number().positive().max(500).optional(),
-      heightCm: z.number().positive().max(300).optional(),
-    })
-    .optional(),
+  // บัญชีผู้ป่วยไม่ได้สร้างจากที่นี่ — สร้างผู้ป่วยที่ /api/patients
+  // แล้วค่อยเปิดสิทธิ์เข้าระบบทีหลังที่ /api/patients/[id]/account
+  role: z.enum(['SUPER_ADMIN', 'ADMIN']),
 })
 
 export async function POST(request: Request) {
   return handle(async () => {
     const session = await requireSession(ADMIN_ROLES)
     const body = createSchema.parse(await request.json())
-
-    if (body.role === 'USER' && !body.patient) {
-      throw badRequest('PATIENT_REQUIRED', 'บัญชีผู้ป่วยต้องระบุ HN')
-    }
 
     const user = await createUser(
       session,
@@ -84,23 +72,10 @@ export async function POST(request: Request) {
         fullName: body.fullName,
         email: body.email || null,
         role: body.role,
-        patient: body.patient
-          ? { ...body.patient, birthDate: body.patient.birthDate || null }
-          : null,
       },
       requestMeta(request),
     )
 
-    return ok(
-      {
-        user: {
-          id: user.id,
-          username: user.username,
-          role: user.role,
-          patientId: user.patient?.id ?? null,
-        },
-      },
-      201,
-    )
+    return ok({ user: { id: user.id, username: user.username, role: user.role } }, 201)
   })
 }

@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { getSession } from './session'
 import { isAdmin } from '@/lib/permissions'
+import { isPatientPortalEnabled } from '@/lib/settings'
 import type { AccessTokenPayload } from './jwt'
 
 /**
@@ -19,5 +20,7 @@ export async function requirePatientPage(): Promise<AccessTokenPayload & { patie
   const session = await getSession()
   if (!session) redirect('/login')
   if (!session.patientId) redirect('/admin/patients')
+  // ปิดส่วนผู้ป่วยระหว่างที่ยังใช้เป็นระบบของเจ้าหน้าที่ล้วน
+  if (!(await isPatientPortalEnabled())) redirect('/login?portal=disabled')
   return session as AccessTokenPayload & { patientId: string }
 }

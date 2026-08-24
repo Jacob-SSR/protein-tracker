@@ -6,16 +6,18 @@ import {
   getMealBackdateDays,
   getMealFutureDays,
   getNotifyThresholds,
+  isPatientPortalEnabled,
 } from '@/lib/settings'
 import { prisma } from '@/lib/db/prisma'
 
 export default async function AdminSettingsPage() {
   await requireAdminPage()
 
-  const [backdateDays, futureDays, thresholds, rows] = await Promise.all([
+  const [backdateDays, futureDays, thresholds, portalEnabled, rows] = await Promise.all([
     getMealBackdateDays(),
     getMealFutureDays(),
     getNotifyThresholds(),
+    isPatientPortalEnabled(),
     prisma.systemSetting.findMany({
       where: {
         key: {
@@ -23,6 +25,7 @@ export default async function AdminSettingsPage() {
             SETTING_KEYS.MEAL_BACKDATE_DAYS,
             SETTING_KEYS.MEAL_FUTURE_DAYS,
             SETTING_KEYS.NOTIFY_THRESHOLDS,
+            SETTING_KEYS.PATIENT_PORTAL_ENABLED,
           ],
         },
       },
@@ -51,6 +54,7 @@ export default async function AdminSettingsPage() {
         backdateDays={backdateDays}
         futureDays={futureDays}
         thresholds={thresholds}
+        portalEnabled={portalEnabled}
         updatedBy={updatedBy}
       />
     </div>

@@ -31,7 +31,7 @@ export function UserManager({
   currentUserId: string
 }) {
   const router = useRouter()
-  const [role, setRole] = useState<Row['role']>('USER')
+  const [role, setRole] = useState<Row['role']>('ADMIN')
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
@@ -54,25 +54,11 @@ export function UserManager({
   async function create(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
-    const role = String(form.get('role')) as Row['role']
-    const weight = Number(form.get('weightKg'))
-    const height = Number(form.get('heightCm'))
-
     const body = {
       username: String(form.get('username')).trim(),
       password: String(form.get('password')),
       fullName: String(form.get('fullName')).trim(),
-      role,
-      patient:
-        role === 'USER'
-          ? {
-              hn: String(form.get('hn')).trim(),
-              birthDate: String(form.get('birthDate') || ''),
-              gender: (String(form.get('gender')) || undefined) as 'MALE' | 'FEMALE' | 'OTHER',
-              weightKg: weight > 0 ? weight : undefined,
-              heightCm: height > 0 ? height : undefined,
-            }
-          : undefined,
+      role: String(form.get('role')) as Row['role'],
     }
 
     const formElement = event.currentTarget
@@ -108,7 +94,10 @@ export function UserManager({
 
   return (
     <div className="flex flex-col gap-4">
-      <Card title="สร้างบัญชีใหม่">
+      <Card
+        title="สร้างบัญชีเจ้าหน้าที่"
+        description="บัญชีผู้ป่วยไม่ได้สร้างที่นี่ — เพิ่มผู้ป่วยที่หน้า “ผู้ป่วย” แล้วเปิดสิทธิ์เข้าระบบเป็นรายคนทีหลัง"
+      >
         <form onSubmit={create} className="flex flex-col gap-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="ชื่อผู้ใช้" hint="a-z 0-9 . _ - อย่างน้อย 3 ตัว">
@@ -125,38 +114,13 @@ export function UserManager({
                 name="role"
                 value={role}
                 onChange={(event) => setRole(event.target.value as Row['role'])}
+                disabled={!canManageAdmins}
               >
-                <option value="USER">ผู้ป่วย</option>
-                {canManageAdmins ? <option value="ADMIN">ผู้ดูแล</option> : null}
+                <option value="ADMIN">ผู้ดูแล</option>
                 {canManageAdmins ? <option value="SUPER_ADMIN">ผู้ดูแลสูงสุด</option> : null}
               </Select>
             </Field>
           </div>
-
-          {role === 'USER' ? (
-            <div className="grid gap-3 rounded-lg bg-background p-3 sm:grid-cols-3">
-              <Field label="HN">
-                <Input name="hn" required />
-              </Field>
-              <Field label="วันเกิด">
-                <Input name="birthDate" type="date" />
-              </Field>
-              <Field label="เพศ">
-                <Select name="gender" defaultValue="">
-                  <option value="">ไม่ระบุ</option>
-                  <option value="MALE">ชาย</option>
-                  <option value="FEMALE">หญิง</option>
-                  <option value="OTHER">อื่นๆ</option>
-                </Select>
-              </Field>
-              <Field label="น้ำหนัก (kg)" hint="ใส่ตอนนี้เพื่อคำนวณเป้าหมายได้เลย">
-                <Input name="weightKg" type="number" step="0.1" min="1" className="tabular" />
-              </Field>
-              <Field label="ส่วนสูง (cm)">
-                <Input name="heightCm" type="number" step="0.1" min="1" className="tabular" />
-              </Field>
-            </div>
-          ) : null}
 
           {error ? <Alert>{error}</Alert> : null}
           {notice ? <Alert tone="ok">{notice}</Alert> : null}
