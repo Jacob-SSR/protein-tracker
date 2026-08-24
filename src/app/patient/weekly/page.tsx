@@ -1,45 +1,53 @@
 import { requirePatientPage } from '@/lib/auth/guards'
 import { today } from '@/lib/date'
 import { getWeeklySummary } from '@/lib/meals/summary'
+import { Badge, Card, PageHeader, Table } from '@/components/ui'
 
 export default async function PatientWeeklyPage() {
   const session = await requirePatientPage()
-
   const summary = await getWeeklySummary(session.patientId, today())
 
   return (
-    <div className="flex flex-col gap-4">
-      <h1 className="text-xl font-semibold">
-        สรุปรายสัปดาห์ ({summary.from} — {summary.to})
-      </h1>
-      <p className="text-sm text-gray-500">
-        เฉลี่ยวันละ {summary.averageConsumedGrams} g · เกินเป้าหมาย {summary.daysOverTarget} วัน
-      </p>
-      <table className="w-full text-left text-sm">
-        <thead>
-          <tr className="border-b">
-            <th className="p-2">วันที่</th>
-            <th className="p-2">เป้าหมาย</th>
-            <th className="p-2">ทานแล้ว</th>
-            <th className="p-2">ส่วนต่าง</th>
-          </tr>
-        </thead>
-        <tbody>
+    <div className="flex flex-col gap-6">
+      <PageHeader title="สรุปรายสัปดาห์" description={`${summary.from} — ${summary.to}`} />
+
+      <Card>
+        <div className="grid grid-cols-2 gap-3 text-center">
+          <div>
+            <p className="text-xs text-muted">เฉลี่ยต่อวัน</p>
+            <p className="tabular text-xl font-semibold">{summary.averageConsumedGrams} g</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted">วันที่เกินเป้าหมาย</p>
+            <p className="tabular text-xl font-semibold">{summary.daysOverTarget} วัน</p>
+          </div>
+        </div>
+      </Card>
+
+      <Card title="รายวัน">
+        <Table head={['วันที่', 'เป้าหมาย', 'ทานแล้ว', 'ส่วนต่าง']}>
           {summary.days.map((day) => {
             const diff = day.targetGrams === null ? null : day.consumedGrams - day.targetGrams
             return (
-              <tr key={day.date} className="border-b">
-                <td className="p-2">{day.date}</td>
-                <td className="p-2">{day.targetGrams ?? '-'}</td>
-                <td className="p-2">{day.consumedGrams}</td>
-                <td className={`p-2 ${diff !== null && diff > 0 ? 'text-red-600' : ''}`}>
-                  {diff === null ? '-' : `${diff > 0 ? '+' : ''}${diff.toFixed(2)}`}
+              <tr key={day.date} className="border-b border-line last:border-0">
+                <td className="px-3 py-2">{day.date}</td>
+                <td className="px-3 py-2 tabular">{day.targetGrams ?? '—'}</td>
+                <td className="px-3 py-2 tabular">{day.consumedGrams}</td>
+                <td className="px-3 py-2">
+                  {diff === null ? (
+                    '—'
+                  ) : (
+                    <Badge tone={diff > 0 ? 'danger' : 'ok'}>
+                      {diff > 0 ? '+' : ''}
+                      {diff.toFixed(2)} g
+                    </Badge>
+                  )}
                 </td>
               </tr>
             )
           })}
-        </tbody>
-      </table>
+        </Table>
+      </Card>
     </div>
   )
 }

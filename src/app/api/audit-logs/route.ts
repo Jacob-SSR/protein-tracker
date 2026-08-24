@@ -34,6 +34,9 @@ export async function GET(request: Request) {
       include: { actor: { select: { username: true, fullName: true } } },
     })
 
-    return ok({ logs, nextCursor: logs.length === query.take ? logs.at(-1)?.id : null })
+    return ok({
+      logs,
+      nextCursor: logs.length === query.take ? logs.at(-1)?.id : null,
+    })
   })
 }

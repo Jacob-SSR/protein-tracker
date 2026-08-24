@@ -9,7 +9,9 @@ import { badRequest } from '@/lib/errors'
 export async function GET() {
   return handle(async () => {
     await requireSession(ADMIN_ROLES)
-    const rows = await prisma.systemSetting.findMany({ orderBy: { key: 'asc' } })
+    const rows = await prisma.systemSetting.findMany({
+      orderBy: { key: 'asc' },
+    })
     return ok({
       settings: rows.map((row) => ({
         key: row.key,
@@ -34,12 +36,14 @@ export async function PUT(request: Request) {
     const session = await requireSession(ADMIN_ROLES)
     const body = bodySchema.parse(await request.json())
 
-    const existing = await prisma.systemSetting.findUnique({ where: { key: body.key } })
+    const existing = await prisma.systemSetting.findUnique({
+      where: { key: body.key },
+    })
     const valueType = existing?.valueType ?? SETTING_DEFAULTS[body.key]?.valueType
     if (!valueType) throw badRequest('UNKNOWN_SETTING', `ไม่รู้จัก setting "${body.key}"`)
 
     try {
-      assertSettingValue(body.value, valueType)
+      assertSettingValue(body.key, body.value, valueType)
     } catch (error) {
       throw badRequest('INVALID_SETTING_VALUE', (error as Error).message)
     }

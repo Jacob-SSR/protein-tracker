@@ -1,83 +1,101 @@
-import Link from 'next/link'
 import { requirePatientPage } from '@/lib/auth/guards'
-import { today } from '@/lib/date'
+import { formatDateOnly, today } from '@/lib/date'
 import { getDailySummary } from '@/lib/meals/summary'
-
-const MEAL_LABELS: Record<string, string> = {
-  BREAKFAST: 'มื้อเช้า',
-  LUNCH: 'มื้อกลางวัน',
-  DINNER: 'มื้อเย็น',
-  SNACK: 'ของว่าง',
-}
+import { Alert, Card, EmptyState, LinkButton, PageHeader } from '@/components/ui'
+import { MEAL_LABELS } from '@/lib/meals/labels'
 
 export default async function PatientDashboard() {
   const session = await requirePatientPage()
+  const date = today()
+  const summary = await getDailySummary(session.patientId, date)
 
-  const summary = await getDailySummary(session.patientId, today())
+  const percent = summary.percent ?? 0
+  const over = summary.targetGrams !== null && summary.consumedGrams > summary.targetGrams
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-xl font-semibold">สรุปวันนี้ ({summary.date})</h1>
+      <PageHeader
+        title="สรุปวันนี้"
+        description={formatDateOnly(date)}
+        actions={<LinkButton href="/patient/meals">บันทึกอาหาร</LinkButton>}
+      />
 
-      <section className="grid grid-cols-3 gap-3 text-center">
-        <div className="rounded border p-3">
-          <p className="text-xs text-gray-500">🎯 เป้าหมาย</p>
-          <p className="text-lg font-semibold">
-            {summary.targetGrams === null ? 'ยังไม่กำหนด' : `${summary.targetGrams} g`}
-          </p>
-        </div>
-        <div className="rounded border p-3">
-          <p className="text-xs text-gray-500">🍗 ทานแล้ว</p>
-          <p className="text-lg font-semibold">{summary.consumedGrams} g</p>
-        </div>
-        <div className="rounded border p-3">
-          <p className="text-xs text-gray-500">📉 เหลือ</p>
-          <p className="text-lg font-semibold">
-            {summary.remainingGrams === null ? '-' : `${summary.remainingGrams} g`}
-          </p>
-        </div>
-      </section>
-
-      {summary.notification ? (
-        <p
-          className={
-            summary.notification.level === 'DANGER'
-              ? 'rounded border border-red-300 bg-red-50 p-3 text-sm text-red-700'
-              : 'rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800'
-          }
-        >
-          {summary.notification.message}
-        </p>
-      ) : null}
-
-      <section className="flex flex-col gap-3">
-        {summary.meals.length === 0 ? (
-          <p className="text-sm text-gray-500">ยังไม่มีรายการอาหารของวันนี้</p>
-        ) : (
-          summary.meals.map((meal) => (
-            <div key={meal.id} className="rounded border p-3">
-              <div className="flex justify-between text-sm font-medium">
-                <span>{MEAL_LABELS[meal.mealType] ?? meal.mealType}</span>
-                <span>{meal.subtotalGrams} g</span>
-              </div>
-              <ul className="mt-2 flex flex-col gap-1 text-sm text-gray-600">
-                {meal.items.map((item) => (
-                  <li key={item.id} className="flex justify-between">
-                    <span>
-                      {item.foodName} · {item.quantity} {item.unitName}
-                    </span>
-                    <span>{item.proteinAmount} g</span>
-                  </li>
-                ))}
-              </ul>
+      <Card>
+        <div className="flex flex-col gap-4">
+          <div className="grid grid-cols-3 gap-3 text-center">
+            <div>
+              <p className="text-xs text-muted">🎯 เป้าหมาย</p>
+              <p className="tabular text-xl font-semibold">
+                {summary.targetGrams === null ? '—' : `${summary.targetGrams} g`}
+              </p>
             </div>
-          ))
-        )}
-      </section>
+            <div>
+              <p className="text-xs text-muted">🍗 ทานแล้ว</p>
+              <p className="tabular text-xl font-semibold text-brand">{summary.consumedGrams} g</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted">{over ? '⚠️ เกิน' : '📉 เหลือ'}</p>
+              <p className={`tabular text-xl font-semibold ${over ? 'text-danger' : ''}`}>
+                {summary.remainingGrams === null ? '—' : `${Math.abs(summary.remainingGrams)} g`}
+              </p>
+            </div>
+          </div>
 
-      <Link href="/patient/meals" className="rounded bg-black p-2 text-center text-white">
-        บันทึกอาหาร
-      </Link>
+          {summary.targetGrams === null ? (
+            <Alert tone="warn">
+              ยังไม่มีเป้าหมายโปรตีน — ติดต่อเจ้าหน้าที่เพื่อกำหนดเป้าหมายให้คุณ
+            </Alert>
+          ) : (
+            <div className="h-3 overflow-hidden rounded-full bg-background">
+              <div
+                className={`h-full rounded-full transition-all ${over ? 'bg-danger' : 'bg-brand'}`}
+                style={{ width: `${Math.min(percent, 100)}%` }}
+              />
+            </div>
+          )}
+
+          {summary.notification ? (
+            <Alert
+              tone={
+                summary.notification.level === 'DANGER'
+                  ? 'danger'
+                  : summary.notification.level === 'WARN'
+                    ? 'warn'
+                    : 'brand'
+              }
+            >
+              {summary.notification.message}
+            </Alert>
+          ) : null}
+        </div>
+      </Card>
+
+      <Card title="รายการอาหารวันนี้">
+        {summary.meals.length === 0 ? (
+          <EmptyState>ยังไม่มีรายการ — กด &quot;บันทึกอาหาร&quot; เพื่อเริ่ม</EmptyState>
+        ) : (
+          <ul className="flex flex-col gap-3">
+            {summary.meals.map((meal) => (
+              <li key={meal.id} className="rounded-lg border border-line p-3">
+                <div className="flex justify-between text-sm font-medium">
+                  <span>{MEAL_LABELS[meal.mealType] ?? meal.mealType}</span>
+                  <span className="tabular">{meal.subtotalGrams} g</span>
+                </div>
+                <ul className="mt-2 flex flex-col gap-1 text-sm text-muted">
+                  {meal.items.map((item) => (
+                    <li key={item.id} className="flex justify-between gap-3">
+                      <span>
+                        {item.foodName} · {item.quantity} × {item.unitName}
+                      </span>
+                      <span className="tabular">{item.proteinAmount} g</span>
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
     </div>
   )
 }

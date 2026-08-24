@@ -28,7 +28,9 @@ export async function GET(request: Request) {
       },
       take,
       orderBy: { name: 'asc' },
-      include: { units: { orderBy: [{ isDefault: 'desc' }, { sortOrder: 'asc' }] } },
+      include: {
+        units: { orderBy: [{ isDefault: 'desc' }, { sortOrder: 'asc' }] },
+      },
     })
 
     return ok({
@@ -76,7 +78,8 @@ export async function POST(request: Request) {
     const body = createSchema.parse(await request.json())
 
     const defaults = body.units.filter((unit) => unit.isDefault)
-    if (defaults.length > 1) throw badRequest('MULTIPLE_DEFAULT_UNITS', 'ตั้งหน่วยหลักได้หน่วยเดียว')
+    if (defaults.length > 1)
+      throw badRequest('MULTIPLE_DEFAULT_UNITS', 'ตั้งหน่วยหลักได้หน่วยเดียว')
 
     const admin = isAdmin(session)
 
@@ -108,7 +111,11 @@ export async function POST(request: Request) {
         action: admin ? 'FOOD_CREATE' : 'FOOD_PROPOSE',
         targetType: 'Food',
         targetId: created.id,
-        newValue: { name: created.name, status: created.status, units: body.units },
+        newValue: {
+          name: created.name,
+          status: created.status,
+          units: body.units,
+        },
         ...requestMeta(request),
       })
 

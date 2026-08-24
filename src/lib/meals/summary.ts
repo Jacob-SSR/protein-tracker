@@ -1,3 +1,4 @@
+import type { MealType } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
 import { addDays, eachDay, formatDateOnly, startOfWeek } from '@/lib/date'
 import { num, round2 } from '@/lib/decimal'
@@ -13,7 +14,7 @@ export type DailySummary = {
   notification: NotifyThreshold | null
   meals: {
     id: string
-    mealType: string
+    mealType: MealType
     items: {
       id: string
       foodName: string
@@ -45,25 +46,28 @@ export async function getDailySummary(patientId: string, date: Date): Promise<Da
     getNotifyThresholds(),
   ])
 
-  const mealViews = meals.map((meal) => {
-    const items = meal.items.map((item) => ({
-      id: item.id,
-      foodName: item.foodNameSnapshot,
-      unitName: item.unitNameSnapshot,
-      quantity: num(item.quantity),
-      proteinAmount: num(item.proteinAmount),
-    }))
-    return {
-      id: meal.id,
-      mealType: meal.mealType,
-      items,
-      subtotalGrams: round2(items.reduce((sum, item) => sum + item.proteinAmount, 0)),
-    }
-  })
+  const mealViews = meals
+    .filter((meal) => meal.items.length > 0)
+    .map((meal) => {
+      const items = meal.items.map((item) => ({
+        id: item.id,
+        foodName: item.foodNameSnapshot,
+        unitName: item.unitNameSnapshot,
+        quantity: num(item.quantity),
+        proteinAmount: num(item.proteinAmount),
+      }))
+      return {
+        id: meal.id,
+        mealType: meal.mealType,
+        items,
+        subtotalGrams: round2(items.reduce((sum, item) => sum + item.proteinAmount, 0)),
+      }
+    })
 
   const consumedGrams = round2(mealViews.reduce((sum, meal) => sum + meal.subtotalGrams, 0))
   const targetGrams = calculation ? num(calculation.proteinTargetGrams) : null
-  const percent = targetGrams && targetGrams > 0 ? round2((consumedGrams / targetGrams) * 100) : null
+  const percent =
+    targetGrams && targetGrams > 0 ? round2((consumedGrams / targetGrams) * 100) : null
 
   return {
     date: formatDateOnly(date),
@@ -84,7 +88,10 @@ export type WeeklySummary = {
   daysOverTarget: number
 }
 
-export async function getWeeklySummary(patientId: string, anyDayOfWeek: Date): Promise<WeeklySummary> {
+export async function getWeeklySummary(
+  patientId: string,
+  anyDayOfWeek: Date,
+): Promise<WeeklySummary> {
   const from = startOfWeek(anyDayOfWeek)
   const to = addDays(from, 6)
 

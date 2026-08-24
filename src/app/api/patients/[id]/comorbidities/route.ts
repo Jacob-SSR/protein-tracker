@@ -22,7 +22,9 @@ export async function PUT(request: Request, { params }: Params) {
     const { comorbidityCodes } = bodySchema.parse(await request.json())
     const codes = [...new Set(comorbidityCodes.map((code) => code.toUpperCase()))]
 
-    const comorbidities = await prisma.comorbidity.findMany({ where: { code: { in: codes } } })
+    const comorbidities = await prisma.comorbidity.findMany({
+      where: { code: { in: codes } },
+    })
     if (comorbidities.length !== codes.length) {
       const found = new Set(comorbidities.map((row) => row.code))
       throw badRequest(
@@ -45,9 +47,16 @@ export async function PUT(request: Request, { params }: Params) {
       for (const comorbidity of comorbidities) {
         await tx.patientComorbidity.upsert({
           where: {
-            patientId_comorbidityId: { patientId: id, comorbidityId: comorbidity.id },
+            patientId_comorbidityId: {
+              patientId: id,
+              comorbidityId: comorbidity.id,
+            },
           },
-          create: { patientId: id, comorbidityId: comorbidity.id, isActive: true },
+          create: {
+            patientId: id,
+            comorbidityId: comorbidity.id,
+            isActive: true,
+          },
           update: { isActive: true },
         })
       }

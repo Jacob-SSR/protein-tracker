@@ -13,7 +13,10 @@ const cookieOptions = {
 
 export async function setSessionCookie(token: string, maxAgeSeconds = 8 * 60 * 60) {
   const store = await cookies()
-  store.set(ACCESS_TOKEN_COOKIE, token, { ...cookieOptions, maxAge: maxAgeSeconds })
+  store.set(ACCESS_TOKEN_COOKIE, token, {
+    ...cookieOptions,
+    maxAge: maxAgeSeconds,
+  })
 }
 
 export async function clearSessionCookie() {

@@ -83,6 +83,31 @@ src/
 `src/proxy.ts` เป็นแค่ optimistic redirect เพื่อ UX — **ทุก** route handler เรียก `requireSession()` เอง
 และทุกหน้า admin/patient เรียก `requireAdminPage()` / `requirePatientPage()` เอง
 
+## หน้าจอ
+
+**ฝั่งผู้ป่วย** (`/patient`)
+
+| หน้า | ทำอะไรได้ |
+|---|---|
+| วันนี้ | เป้าหมาย / ทานแล้ว / เหลือ พร้อมแถบความคืบหน้าและข้อความแจ้งเตือนตามเกณฑ์ |
+| บันทึกอาหาร | เลือกวัน+มื้อ ค้นหาอาหาร เลือกหน่วย ใส่จำนวน เห็นโปรตีนที่จะได้ก่อนกดเพิ่ม แก้/ลบรายการได้ |
+| รายสัปดาห์ | ตารางเทียบเป้าหมายกับที่ทานจริงรายวัน + ค่าเฉลี่ยและจำนวนวันที่เกิน |
+| เสนออาหารใหม่ | ส่งอาหารที่ไม่มีในระบบให้แอดมินตรวจ พร้อมดูสถานะที่เคยเสนอ |
+| ความรู้ | อ่านบทความเวอร์ชันที่เผยแพร่ |
+
+**ฝั่งผู้ดูแล** (`/admin`)
+
+| หน้า | ทำอะไรได้ |
+|---|---|
+| ผู้ป่วย | รายชื่อพร้อมน้ำหนักล่าสุดและเป้าหมายปัจจุบัน |
+| ผู้ป่วย → รายคน | บันทึกน้ำหนัก/ผลเลือด/โรคร่วม, Preview → Confirm เป้าหมาย, ดูประวัติทั้งหมด |
+| อาหาร | อนุมัติ/ไม่อนุมัติรายการที่ผู้ป่วยเสนอ, เพิ่ม/แก้อาหารและหน่วย, เก็บเข้าคลัง |
+| กฎโปรตีน | สร้าง/แก้/ปิดใช้งานกฎและเงื่อนไข (แก้แล้วขึ้นเวอร์ชันใหม่) |
+| บทความ | เขียน/แก้บทความ แก้แล้วได้เวอร์ชันใหม่ เลือกเผยแพร่ทีละเวอร์ชัน |
+| ผู้ใช้ | สร้างบัญชีผู้ป่วย/ผู้ดูแล, รีเซ็ตรหัสผ่าน, ปิด-เปิดใช้งาน |
+| ตั้งค่า | ปรับ backdate / ล่วงหน้า / เกณฑ์แจ้งเตือน ผ่านฟอร์ม ไม่ต้องแตะ JSON |
+| Audit Log | อ่านอย่างเดียว เฉพาะ SUPER_ADMIN |
+
 ## API
 
 | Method | Path | สิทธิ์ |
@@ -96,8 +121,14 @@ src/
 | GET | `/api/patients/[id]/protein-target?date=` | admin หรือเจ้าของ |
 | POST | `/api/patients/[id]/protein-target/preview` | admin (ไม่เขียน DB) |
 | POST | `/api/patients/[id]/protein-target/confirm` | admin |
+| GET/POST | `/api/users` | admin (บัญชีระดับ admin ต้อง SUPER_ADMIN) |
+| PATCH | `/api/users/[id]` · PUT `/api/users/[id]/password` | admin |
 | GET/POST | `/api/foods` | ผู้ป่วยเห็นเฉพาะ ACTIVE / เสนอใหม่ได้เป็น PENDING |
+| GET/PATCH | `/api/foods/[id]` | admin |
 | POST | `/api/foods/[id]/approve` `/reject` | admin |
+| GET/POST | `/api/protein-rules` · PUT/DELETE `/api/protein-rules/[id]` | admin |
+| GET/POST | `/api/comorbidities` | admin |
+| GET/POST | `/api/knowledge` · POST `/api/knowledge/[slug]` | อ่าน: ทุกคน (ผู้ป่วยเห็นเฉพาะที่เผยแพร่) / เขียน: admin |
 | GET/POST | `/api/meals` | เจ้าของ (admin ต้องส่ง `patientId`) |
 | PATCH/DELETE | `/api/meals/items/[itemId]` | เจ้าของ |
 | GET | `/api/summary/weekly` | เจ้าของ |
@@ -105,6 +136,17 @@ src/
 | GET | `/api/audit-logs` | SUPER_ADMIN เท่านั้น |
 
 Response format เดียวกันทั้งหมด: สำเร็จ `{ data: ... }` / ผิดพลาด `{ error: { code, message, details? } }`
+
+## ตั้งค่าระบบ
+
+หน้า `/admin/settings` เป็นฟอร์มล้วน ไม่มีช่องให้กรอก JSON — ค่าที่เก็บจริงยังเป็น key-value ใน `SystemSetting`
+แต่ฝั่ง UI แปลงให้เป็นตัวเลือก/ตาราง และฝั่ง server ตรวจโครงสร้างซ้ำที่ `validateKnownSetting()` ใน `src/lib/settings.ts`
+
+| key | ความหมาย |
+|---|---|
+| `meal_backdate_days` | `-1` ไม่จำกัด · `0` วันนี้เท่านั้น · `n` ย้อนหลัง n วัน |
+| `meal_future_days` | บันทึกล่วงหน้าได้กี่วัน (ปกติ `0`) |
+| `notify_thresholds` | รายการเกณฑ์ `{percent, level, message}` — แก้ผ่านตารางในหน้าตั้งค่า |
 
 ## กฎคำนวณโปรตีน
 
@@ -134,4 +176,5 @@ nested condition / OR ยังไม่ทำ — รอเห็น rule จ�
 - `PatientLab.labType` ยังเป็น free string (normalize เป็นตัวพิมพ์ใหญ่ตอนบันทึกแล้ว) — รอ list ผลเลือดจริงก่อนทำ master table `LabType`
 - `meal_backdate_days` default `-1` ปรับได้ที่หน้า `/admin/settings`
 - `ProteinRuleCondition` รองรับแค่ threshold + AND
-- ยังไม่มีหน้า admin สำหรับสร้าง user/ผู้ป่วย, จัดการกฎโปรตีน และ Knowledge (model พร้อมแล้วใน schema)
+- ยังไม่มีหน้าแก้ไข/ลบข้อมูลน้ำหนักและผลเลือดที่บันทึกผิด (ตอนนี้แก้ได้ด้วยการบันทึกแถวใหม่ทับความหมายเดิม)
+- ยังไม่มี pagination ในหน้า Audit Log (แสดง 200 รายการล่าสุด — API รองรับ cursor แล้ว)

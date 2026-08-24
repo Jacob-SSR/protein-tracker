@@ -2,6 +2,8 @@
 
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useState } from 'react'
+import { Alert, Button, Field, Input } from '@/components/ui'
+import { request } from '@/lib/client/api'
 
 export function LoginForm() {
   const router = useRouter()
@@ -15,52 +17,37 @@ export function LoginForm() {
     setPending(true)
 
     const form = new FormData(event.currentTarget)
-    const response = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        username: form.get('username'),
-        password: form.get('password'),
-      }),
-    })
-    const payload = await response.json()
-    setPending(false)
+    try {
+      const data = await request<{ user: { role: string } }>('/api/auth/login', {
+        method: 'POST',
+        json: {
+          username: form.get('username'),
+          password: form.get('password'),
+        },
+      })
 
-    if (!response.ok) {
-      setError(payload?.error?.message ?? 'เข้าสู่ระบบไม่สำเร็จ')
-      return
+      const next = searchParams.get('next')
+      const fallback = data.user.role === 'USER' ? '/patient/dashboard' : '/admin/patients'
+      router.replace(next && next.startsWith('/') ? next : fallback)
+      router.refresh()
+    } catch (cause) {
+      setError((cause as Error).message)
+      setPending(false)
     }
-
-    const next = searchParams.get('next')
-    const fallback = payload.data.user.role === 'USER' ? '/patient/dashboard' : '/admin/patients'
-    router.replace(next && next.startsWith('/') ? next : fallback)
-    router.refresh()
   }
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-3">
-      <label className="flex flex-col gap-1 text-sm">
-        ชื่อผู้ใช้
-        <input name="username" required autoComplete="username" className="rounded border p-2" />
-      </label>
-      <label className="flex flex-col gap-1 text-sm">
-        รหัสผ่าน
-        <input
-          name="password"
-          type="password"
-          required
-          autoComplete="current-password"
-          className="rounded border p-2"
-        />
-      </label>
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
-      <button
-        type="submit"
-        disabled={pending}
-        className="rounded bg-black p-2 text-white disabled:opacity-50"
-      >
+      <Field label="ชื่อผู้ใช้">
+        <Input name="username" required autoComplete="username" />
+      </Field>
+      <Field label="รหัสผ่าน">
+        <Input name="password" type="password" required autoComplete="current-password" />
+      </Field>
+      {error ? <Alert>{error}</Alert> : null}
+      <Button type="submit" disabled={pending}>
         {pending ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ'}
-      </button>
+      </Button>
     </form>
   )
 }

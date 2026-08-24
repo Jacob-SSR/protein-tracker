@@ -8,10 +8,17 @@ import bcrypt from 'bcryptjs'
  * ไม่มี demo/dummy patient เพราะระบบนี้ขึ้น production จริงตั้งแต่แรก
  */
 const prisma = new PrismaClient({
-  adapter: new PrismaPg({ connectionString: process.env.DIRECT_URL ?? process.env.DATABASE_URL }),
+  adapter: new PrismaPg({
+    connectionString: process.env.DIRECT_URL ?? process.env.DATABASE_URL,
+  }),
 })
 
-const SETTINGS: { key: string; value: string; valueType: SettingValueType; description: string }[] = [
+const SETTINGS: {
+  key: string
+  value: string
+  valueType: SettingValueType
+  description: string
+}[] = [
   {
     key: 'meal_backdate_days',
     value: '-1',
@@ -27,10 +34,26 @@ const SETTINGS: { key: string; value: string; valueType: SettingValueType; descr
   {
     key: 'notify_thresholds',
     value: JSON.stringify([
-      { percent: 80, level: 'INFO', message: 'ทานโปรตีนถึง 80% ของเป้าหมายแล้ว' },
-      { percent: 90, level: 'WARN', message: 'ใกล้ถึงเป้าหมายแล้ว เหลืออีกนิดเดียว' },
-      { percent: 100, level: 'WARN', message: 'ถึงเป้าหมายโปรตีนของวันนี้แล้ว' },
-      { percent: 110, level: 'DANGER', message: 'เกินเป้าหมายแล้ว ควรงดโปรตีนเพิ่ม' },
+      {
+        percent: 80,
+        level: 'INFO',
+        message: 'ทานโปรตีนถึง 80% ของเป้าหมายแล้ว',
+      },
+      {
+        percent: 90,
+        level: 'WARN',
+        message: 'ใกล้ถึงเป้าหมายแล้ว เหลืออีกนิดเดียว',
+      },
+      {
+        percent: 100,
+        level: 'WARN',
+        message: 'ถึงเป้าหมายโปรตีนของวันนี้แล้ว',
+      },
+      {
+        percent: 110,
+        level: 'DANGER',
+        message: 'เกินเป้าหมายแล้ว ควรงดโปรตีนเพิ่ม',
+      },
     ]),
     valueType: 'JSON',
     description: 'เกณฑ์แจ้งเตือน % ของเป้าหมายโปรตีนรายวัน',
@@ -90,7 +113,13 @@ async function main() {
         createdById: superAdmin.id,
         conditions: {
           create: [
-            { conditionType: 'DIALYSIS', operator: 'EQ', value: 'true', proteinFactor: 1.2, sortOrder: 0 },
+            {
+              conditionType: 'DIALYSIS',
+              operator: 'EQ',
+              value: 'true',
+              proteinFactor: 1.2,
+              sortOrder: 0,
+            },
           ],
         },
       },
@@ -102,8 +131,20 @@ async function main() {
         createdById: superAdmin.id,
         conditions: {
           create: [
-            { conditionType: 'EGFR', operator: 'LT', value: '30', proteinFactor: 0.6, sortOrder: 0 },
-            { conditionType: 'DIALYSIS', operator: 'EQ', value: 'false', proteinFactor: 0.6, sortOrder: 1 },
+            {
+              conditionType: 'EGFR',
+              operator: 'LT',
+              value: '30',
+              proteinFactor: 0.6,
+              sortOrder: 0,
+            },
+            {
+              conditionType: 'DIALYSIS',
+              operator: 'EQ',
+              value: 'false',
+              proteinFactor: 0.6,
+              sortOrder: 1,
+            },
           ],
         },
       },
@@ -115,7 +156,13 @@ async function main() {
         createdById: superAdmin.id,
         conditions: {
           create: [
-            { conditionType: 'EGFR', operator: 'LT', value: '60', proteinFactor: 0.8, sortOrder: 0 },
+            {
+              conditionType: 'EGFR',
+              operator: 'LT',
+              value: '60',
+              proteinFactor: 0.8,
+              sortOrder: 0,
+            },
           ],
         },
       },
@@ -128,7 +175,13 @@ async function main() {
         createdById: superAdmin.id,
         conditions: {
           create: [
-            { conditionType: 'WEIGHT', operator: 'GT', value: '0', proteinFactor: 1.0, sortOrder: 0 },
+            {
+              conditionType: 'WEIGHT',
+              operator: 'GT',
+              value: '0',
+              proteinFactor: 1.0,
+              sortOrder: 0,
+            },
           ],
         },
       },

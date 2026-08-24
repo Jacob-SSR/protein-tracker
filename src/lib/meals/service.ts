@@ -239,6 +239,14 @@ export async function deleteMealItem(input: {
 
     await tx.mealItem.delete({ where: { id: existing.id } })
 
+    // ลบมื้อที่ไม่เหลือรายการแล้ว ไม่ให้ค้างเป็นมื้อว่าง 0 g ในหน้าสรุป
+    const remaining = await tx.mealItem.count({
+      where: { mealId: existing.mealId },
+    })
+    if (remaining === 0) {
+      await tx.meal.delete({ where: { id: existing.mealId } })
+    }
+
     await writeAudit(tx, {
       actorId: input.actorId,
       action: 'MEAL_ITEM_DELETE',

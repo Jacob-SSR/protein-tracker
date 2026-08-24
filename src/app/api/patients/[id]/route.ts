@@ -24,7 +24,10 @@ export async function GET(_request: Request, { params }: Params) {
           user: { select: { fullName: true } },
           measurements: { orderBy: { measuredOn: 'desc' }, take: 10 },
           labs: { orderBy: { measuredOn: 'desc' }, take: 30 },
-          comorbidities: { where: { isActive: true }, include: { comorbidity: true } },
+          comorbidities: {
+            where: { isActive: true },
+            include: { comorbidity: true },
+          },
         },
       }),
       getActiveCalculation(id),

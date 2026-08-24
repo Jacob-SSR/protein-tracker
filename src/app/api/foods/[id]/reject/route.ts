@@ -21,7 +21,12 @@ export async function POST(request: Request, { params }: Params) {
     await prisma.$transaction(async (tx) => {
       await tx.food.update({
         where: { id },
-        data: { status: 'REJECTED', rejectReason: reason, approvedById: null, approvedAt: null },
+        data: {
+          status: 'REJECTED',
+          rejectReason: reason,
+          approvedById: null,
+          approvedAt: null,
+        },
       })
       await writeAudit(tx, {
         actorId: session.userId,

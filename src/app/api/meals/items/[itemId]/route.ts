@@ -41,7 +41,9 @@ export async function PATCH(request: Request, { params }: Params) {
       ...requestMeta(request),
     })
 
-    return ok({ summary: await getDailySummary(meal.patientId, meal.mealDate) })
+    return ok({
+      summary: await getDailySummary(meal.patientId, meal.mealDate),
+    })
   })
 }
 
@@ -59,6 +61,8 @@ export async function DELETE(request: Request, { params }: Params) {
       ...requestMeta(request),
     })
 
-    return ok({ summary: await getDailySummary(meal.patientId, meal.mealDate) })
+    return ok({
+      summary: await getDailySummary(meal.patientId, meal.mealDate),
+    })
   })
 }

@@ -29,10 +29,26 @@ export const SETTING_DEFAULTS: Record<
   },
   [SETTING_KEYS.NOTIFY_THRESHOLDS]: {
     value: JSON.stringify([
-      { percent: 80, level: 'INFO', message: 'ทานโปรตีนถึง 80% ของเป้าหมายแล้ว' },
-      { percent: 90, level: 'WARN', message: 'ใกล้ถึงเป้าหมายแล้ว เหลืออีกนิดเดียว' },
-      { percent: 100, level: 'WARN', message: 'ถึงเป้าหมายโปรตีนของวันนี้แล้ว' },
-      { percent: 110, level: 'DANGER', message: 'เกินเป้าหมายแล้ว ควรงดโปรตีนเพิ่ม' },
+      {
+        percent: 80,
+        level: 'INFO',
+        message: 'ทานโปรตีนถึง 80% ของเป้าหมายแล้ว',
+      },
+      {
+        percent: 90,
+        level: 'WARN',
+        message: 'ใกล้ถึงเป้าหมายแล้ว เหลืออีกนิดเดียว',
+      },
+      {
+        percent: 100,
+        level: 'WARN',
+        message: 'ถึงเป้าหมายโปรตีนของวันนี้แล้ว',
+      },
+      {
+        percent: 110,
+        level: 'DANGER',
+        message: 'เกินเป้าหมายแล้ว ควรงดโปรตีนเพิ่ม',
+      },
     ]),
     valueType: 'JSON',
     description: 'เกณฑ์แจ้งเตือน % ของเป้าหมายโปรตีนรายวัน',
@@ -72,6 +88,48 @@ export async function getNotifyThresholds(): Promise<NotifyThreshold[]> {
   }
 }
 
+/** ตรวจโครงสร้างของ setting ที่ระบบรู้จัก — UI ส่งค่ามายังไงก็ต้องผ่านด่านนี้เสมอ */
+export function validateKnownSetting(key: string, value: string) {
+  if (key === SETTING_KEYS.MEAL_BACKDATE_DAYS) {
+    const days = Number.parseInt(value, 10)
+    if (!Number.isInteger(days) || days < -1 || days > 365) {
+      throw new Error('ต้องเป็น -1 (ไม่จำกัด) หรือจำนวนวัน 0-365')
+    }
+    return
+  }
+
+  if (key === SETTING_KEYS.MEAL_FUTURE_DAYS) {
+    const days = Number.parseInt(value, 10)
+    if (!Number.isInteger(days) || days < 0 || days > 30) {
+      throw new Error('ต้องเป็นจำนวนวัน 0-30')
+    }
+    return
+  }
+
+  if (key === SETTING_KEYS.NOTIFY_THRESHOLDS) {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(value)
+    } catch {
+      throw new Error('รูปแบบข้อมูลไม่ถูกต้อง')
+    }
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      throw new Error('ต้องมีเกณฑ์แจ้งเตือนอย่างน้อย 1 ข้อ')
+    }
+    for (const row of parsed as NotifyThreshold[]) {
+      if (typeof row?.percent !== 'number' || row.percent <= 0 || row.percent > 500) {
+        throw new Error('เปอร์เซ็นต์ต้องอยู่ระหว่าง 1-500')
+      }
+      if (!['INFO', 'WARN', 'DANGER'].includes(row?.level)) {
+        throw new Error('ระดับการแจ้งเตือนไม่ถูกต้อง')
+      }
+      if (typeof row?.message !== 'string' || row.message.trim().length === 0) {
+        throw new Error('ต้องใส่ข้อความแจ้งเตือนทุกข้อ')
+      }
+    }
+  }
+}
+
 export function parseSettingValue(value: string, valueType: SettingValueType): unknown {
   switch (valueType) {
     case 'INT':
@@ -87,10 +145,16 @@ export function parseSettingValue(value: string, valueType: SettingValueType): u
   }
 }
 
-/** ตรวจว่าค่าที่ admin ส่งมา parse ได้จริงตาม type ที่ประกาศไว้ */
-export function assertSettingValue(value: string, valueType: SettingValueType) {
-  const parsed = parseSettingValue(value, valueType)
+/** ตรวจว่าค่าที่ admin ส่งมา parse ได้จริงตาม type ที่ประกาศไว้ แล้วตรวจกติกาเฉพาะ key ต่อ */
+export function assertSettingValue(key: string, value: string, valueType: SettingValueType) {
+  let parsed: unknown
+  try {
+    parsed = parseSettingValue(value, valueType)
+  } catch {
+    throw new Error('รูปแบบข้อมูลไม่ถูกต้อง')
+  }
   if ((valueType === 'INT' || valueType === 'FLOAT') && !Number.isFinite(parsed as number)) {
     throw new Error(`ค่า "${value}" ไม่ใช่ตัวเลขที่ถูกต้อง`)
   }
+  validateKnownSetting(key, value)
 }

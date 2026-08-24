@@ -1,18 +1,41 @@
-import Link from 'next/link'
-import { LogoutButton } from '@/components/logout-button'
+import { AppNav } from '@/components/app-nav'
+import { requireAdminPage } from '@/lib/auth/guards'
+import { prisma } from '@/lib/db/prisma'
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+const ROLE_LABELS = {
+  SUPER_ADMIN: 'ผู้ดูแลระบบสูงสุด',
+  ADMIN: 'ผู้ดูแล',
+  USER: 'ผู้ป่วย',
+}
+
+const NAV = [
+  { href: '/admin/patients', label: 'ผู้ป่วย' },
+  { href: '/admin/foods', label: 'อาหาร' },
+  { href: '/admin/protein-rules', label: 'กฎโปรตีน' },
+  { href: '/admin/knowledge', label: 'บทความ' },
+  { href: '/admin/users', label: 'ผู้ใช้' },
+  { href: '/admin/settings', label: 'ตั้งค่า' },
+]
+
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+  const session = await requireAdminPage()
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { id: session.userId },
+    select: { fullName: true },
+  })
+
+  const nav =
+    session.role === 'SUPER_ADMIN'
+      ? [...NAV, { href: '/admin/audit-logs', label: 'Audit Log' }]
+      : NAV
+
   return (
-    <div className="flex min-h-full flex-1 flex-col">
-      <header className="flex items-center justify-between border-b p-4">
-        <nav className="flex gap-4 text-sm">
-          <Link href="/admin/patients">ผู้ป่วย</Link>
-          <Link href="/admin/foods">อาหารรออนุมัติ</Link>
-          <Link href="/admin/settings">ตั้งค่าระบบ</Link>
-        </nav>
-        <LogoutButton />
-      </header>
-      <main className="mx-auto w-full max-w-4xl flex-1 p-4">{children}</main>
-    </div>
+    <>
+      <AppNav
+        items={nav}
+        user={{ fullName: user.fullName, roleLabel: ROLE_LABELS[session.role] }}
+      />
+      <main className="mx-auto w-full max-w-5xl flex-1 p-4 pb-16">{children}</main>
+    </>
   )
 }

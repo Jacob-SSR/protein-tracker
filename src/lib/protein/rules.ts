@@ -133,12 +133,26 @@ export function evaluateCondition(
       }
     }
     if (!Number.isFinite(expected)) {
-      return { ...base, actual: String(actual), matched: false, reason: 'ค่าในกฎไม่ใช่ตัวเลข' }
+      return {
+        ...base,
+        actual: String(actual),
+        matched: false,
+        reason: 'ค่าในกฎไม่ใช่ตัวเลข',
+      }
     }
-    return { ...base, actual: String(actual), matched: compareNumber(actual, condition.operator, expected) }
+    return {
+      ...base,
+      actual: String(actual),
+      matched: compareNumber(actual, condition.operator, expected),
+    }
   }
 
-  return { ...base, actual: null, matched: false, reason: 'ไม่รองรับ conditionType นี้' }
+  return {
+    ...base,
+    actual: null,
+    matched: false,
+    reason: 'ไม่รองรับ conditionType นี้',
+  }
 }
 
 /** กฎหนึ่งข้อจะ match ก็ต่อเมื่อ "ทุก" condition ผ่าน (AND ล้วน) */
@@ -162,5 +176,8 @@ export function selectRule(facts: PatientFacts, rules: RuleInput[]) {
   const evaluations = [...rules]
     .sort((a, b) => a.priority - b.priority || a.id.localeCompare(b.id))
     .map((rule) => evaluateRule(facts, rule))
-  return { evaluations, selected: evaluations.find((evaluation) => evaluation.matched) ?? null }
+  return {
+    evaluations,
+    selected: evaluations.find((evaluation) => evaluation.matched) ?? null,
+  }
 }

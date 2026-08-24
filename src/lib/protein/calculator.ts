@@ -121,8 +121,7 @@ export async function previewProteinTarget(
   const current = await getActiveCalculation(patientId)
 
   const proteinFactor = selected?.proteinFactor ?? null
-  const proteinTargetGrams =
-    proteinFactor === null ? null : round2(proteinFactor * facts.weightKg)
+  const proteinTargetGrams = proteinFactor === null ? null : round2(proteinFactor * facts.weightKg)
 
   return {
     patientId,
