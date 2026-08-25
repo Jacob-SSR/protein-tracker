@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { Alert, Badge, Button, Card, EmptyState, Field, Input } from '@/components/ui'
+import { Alert, Badge, Button, Card, EmptyState, Field, Input, Modal } from '@/components/ui'
 import {
   FoodUnitFields,
   emptyUnit,
@@ -21,6 +21,8 @@ type Food = {
   status: Status
   rejectReason: string | null
   proposedBy: string | null
+  /** จำนวน MealItem ที่อ้างอาหารนี้ — ถ้ามีแปลว่าลบถาวรไม่ได้ */
+  usageCount: number
   units: {
     id: string
     unitName: string
@@ -52,6 +54,7 @@ export function FoodManager({ foods }: { foods: Food[] }) {
   const [query, setQuery] = useState('')
   const [editing, setEditing] = useState<Food | null>(null)
   const [creating, setCreating] = useState(false)
+  const [deleting, setDeleting] = useState<Food | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
@@ -162,12 +165,23 @@ export function FoodManager({ foods }: { foods: Food[] }) {
                     <p className="text-xs text-muted">
                       {food.category ?? 'ไม่ระบุหมวด'}
                       {food.proposedBy ? ` · เสนอโดย ${food.proposedBy}` : ''}
+                      {food.usageCount > 0
+                        ? ` · ผู้ป่วยบันทึกไปแล้ว ${food.usageCount} รายการ`
+                        : ''}
                       {food.rejectReason ? ` · เหตุผล: ${food.rejectReason}` : ''}
                     </p>
-                    <ul className="mt-1 flex flex-wrap gap-x-4 text-sm text-muted tabular">
+                    <ul className="mt-2 flex flex-wrap gap-2">
                       {food.units.map((unit) => (
-                        <li key={unit.id}>
-                          {unit.unitName} → {unit.proteinAmount} g{unit.isDefault ? ' (หลัก)' : ''}
+                        <li
+                          key={unit.id}
+                          className="flex items-center gap-1.5 rounded-full border border-line px-2.5 py-1 text-sm"
+                        >
+                          <span className="font-medium">{unit.unitName}</span>
+                          {unit.gramsPerUnit ? (
+                            <span className="text-muted tabular">({unit.gramsPerUnit} g)</span>
+                          ) : null}
+                          <span className="text-muted tabular">โปรตีน {unit.proteinAmount} g</span>
+                          {unit.isDefault ? <Badge tone="brand">หลัก</Badge> : null}
                         </li>
                       ))}
                     </ul>
@@ -259,6 +273,9 @@ export function FoodManager({ foods }: { foods: Food[] }) {
                         นำกลับมาใช้
                       </Button>
                     ) : null}
+                    <Button variant="danger" onClick={() => setDeleting(food)} disabled={pending}>
+                      ลบ
+                    </Button>
                   </div>
                 </li>
               ))}
@@ -266,7 +283,89 @@ export function FoodManager({ foods }: { foods: Food[] }) {
           )}
         </div>
       </Card>
+
+      {deleting ? (
+        <DeleteFoodModal
+          food={deleting}
+          pending={pending}
+          onClose={() => setDeleting(null)}
+          onConfirm={async () => {
+            await run(async () => {
+              await request(`/api/foods/${deleting.id}`, { method: 'DELETE' })
+              setDeleting(null)
+            }, `ลบ "${deleting.name}" แล้ว`)
+          }}
+        />
+      ) : null}
     </div>
+  )
+}
+
+/**
+ * ลบถาวรได้เฉพาะอาหารที่ยังไม่มีใครบันทึกใช้
+ * ถ้าเคยถูกใช้แล้ว ชี้ทางไป "เก็บเข้าคลัง" ตั้งแต่ในกล่องนี้เลย ไม่ต้องให้กดแล้วเจอ error
+ */
+function DeleteFoodModal({
+  food,
+  pending,
+  onClose,
+  onConfirm,
+}: {
+  food: Food
+  pending: boolean
+  onClose: () => void
+  onConfirm: () => Promise<void>
+}) {
+  const blocked = food.usageCount > 0
+
+  return (
+    <Modal
+      tone="danger"
+      title={`ลบ "${food.name}"`}
+      description={blocked ? 'รายการนี้ลบถาวรไม่ได้' : 'การกระทำนี้ย้อนกลับไม่ได้'}
+      onClose={onClose}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={pending}>
+            {blocked ? 'ปิด' : 'ยกเลิก'}
+          </Button>
+          {blocked ? null : (
+            <Button variant="danger" onClick={() => void onConfirm()} disabled={pending}>
+              {pending ? 'กำลังลบ...' : 'ลบถาวร'}
+            </Button>
+          )}
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3 text-sm">
+        {blocked ? (
+          <>
+            <p>
+              มีผู้ป่วยบันทึกอาหารนี้ไปแล้ว <strong>{food.usageCount}</strong> รายการ
+              ถ้าลบทิ้งประวัติการกินย้อนหลังจะเสียไป
+            </p>
+            <p className="text-muted">
+              ใช้ปุ่ม &quot;เก็บเข้าคลัง&quot; แทน — ผู้ป่วยจะไม่เห็นรายการนี้ตอนบันทึกอาหารใหม่
+              แต่ประวัติเดิมยังอยู่ครบ
+            </p>
+          </>
+        ) : (
+          <>
+            <p>
+              ยังไม่มีใครบันทึกอาหารนี้ ลบได้ทันที — หน่วยทั้งหมด {food.units.length} หน่วย
+              จะถูกลบไปด้วย
+            </p>
+            <ul className="flex flex-col gap-1 rounded-lg bg-background p-3 tabular">
+              {food.units.map((unit) => (
+                <li key={unit.id}>
+                  {unit.unitName} · โปรตีน {unit.proteinAmount} g
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </div>
+    </Modal>
   )
 }
 

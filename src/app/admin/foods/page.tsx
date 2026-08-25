@@ -13,6 +13,7 @@ export default async function AdminFoodsPage() {
     include: {
       units: { orderBy: { sortOrder: 'asc' } },
       proposedBy: { select: { fullName: true } },
+      _count: { select: { mealItems: true } },
     },
   })
 
@@ -37,6 +38,7 @@ export default async function AdminFoodsPage() {
           status: food.status,
           rejectReason: food.rejectReason,
           proposedBy: food.proposedBy?.fullName ?? null,
+          usageCount: food._count.mealItems,
           units: food.units.map((unit) => ({
             id: unit.id,
             unitName: unit.unitName,

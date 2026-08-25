@@ -145,3 +145,54 @@ export async function PATCH(request: Request, { params }: Params) {
     return ok({ food: { id } })
   })
 }
+
+/**
+ * ลบถาวร — ใช้ได้เฉพาะอาหารที่ยังไม่เคยถูกบันทึกในมื้อของผู้ป่วย
+ * ถ้าเคยถูกใช้แล้วต้อง "เก็บเข้าคลัง" แทน เพราะ MealItem อ้าง foodId/foodUnitId อยู่
+ */
+export async function DELETE(request: Request, { params }: Params) {
+  return handle(async () => {
+    const session = await requireSession(ADMIN_ROLES)
+    const { id } = await params
+
+    const existing = await prisma.food.findUnique({
+      where: { id },
+      include: { units: true, _count: { select: { mealItems: true } } },
+    })
+    if (!existing) throw notFound('ไม่พบอาหารรายการนี้')
+
+    if (existing._count.mealItems > 0) {
+      throw badRequest(
+        'FOOD_IN_USE',
+        `ลบไม่ได้ เพราะมีผู้ป่วยบันทึกอาหารนี้ไปแล้ว ${existing._count.mealItems} รายการ — ใช้ "เก็บเข้าคลัง" แทนเพื่อซ่อนจากผู้ป่วยโดยไม่กระทบประวัติ`,
+      )
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // FoodUnit ผูก onDelete: Cascade อยู่แล้ว ลบ Food พอ
+      await tx.food.delete({ where: { id } })
+
+      await writeAudit(tx, {
+        actorId: session.userId,
+        action: 'FOOD_DELETE',
+        targetType: 'Food',
+        targetId: id,
+        oldValue: {
+          name: existing.name,
+          category: existing.category,
+          status: existing.status,
+          units: existing.units.map((unit) => ({
+            unitName: unit.unitName,
+            gramsPerUnit: unit.gramsPerUnit ? num(unit.gramsPerUnit) : null,
+            proteinAmount: num(unit.proteinAmount),
+            isDefault: unit.isDefault,
+          })),
+        },
+        newValue: null,
+        ...requestMeta(request),
+      })
+    })
+
+    return ok({ deleted: { id, name: existing.name } })
+  })
+}
