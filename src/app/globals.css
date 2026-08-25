@@ -10,8 +10,18 @@
   --foreground: #111827;
   --muted: #6b7280;
   --border: #e5e7eb;
-  --brand: #0f766e;
-  --brand-soft: #ccfbf1;
+  --brand: #157a4a;
+  --brand-strong: #10603a;
+  --brand-soft: #e7f4ec;
+  --brand-tint: #f2f9f5;
+  /* พื้นการ์ดสถิติ 3 ใบบนหัวหน้า */
+  --info: #1d4ed8;
+  --info-soft: #eff5ff;
+  --accent-soft: #fff8ec;
+  /* ชุดสีกราฟ ผ่าน validator แล้ว (ΔE protan 8.7, normal 23.2)
+     amber ตัดกับพื้นขาว 2.68:1 จึงต้องมีตัวเลขกำกับทุกแท่ง ซึ่งกราฟนี้มีอยู่แล้ว */
+  --chart-in: #2f8f5b;
+  --chart-over: #e08a1e;
   --danger: #b91c1c;
   --danger-soft: #fee2e2;
   --warn: #b45309;
@@ -27,7 +37,14 @@
   --color-muted: var(--muted);
   --color-line: var(--border);
   --color-brand: var(--brand);
+  --color-brand-strong: var(--brand-strong);
   --color-brand-soft: var(--brand-soft);
+  --color-brand-tint: var(--brand-tint);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-accent-soft: var(--accent-soft);
+  --color-chart-in: var(--chart-in);
+  --color-chart-over: var(--chart-over);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
   --color-warn: var(--warn);

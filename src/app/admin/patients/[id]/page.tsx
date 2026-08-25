@@ -6,8 +6,13 @@ import { num, optionalNum } from '@/lib/decimal'
 import { Badge, Card, EmptyState, PageHeader, Table } from '@/components/ui'
 import { HealthDataForms } from '@/components/health-data-forms'
 import { ProteinTargetPanel } from '@/components/protein-target-panel'
-import { MealLogger } from '@/components/meal-logger'
+import { ProteinWorkspace } from '@/components/protein/workspace'
+import { getWeeklySummary } from '@/lib/meals/summary'
+import { getFrequentFoods } from '@/lib/foods/frequent'
+import { getCalculationForDate } from '@/lib/protein/calculator'
+import { WEIGHT_BASIS_LABELS } from '@/lib/protein/rules'
 import { PatientAccountPanel } from '@/components/patient-account-panel'
+import { PatientDangerZone } from '@/components/patient-danger-zone'
 import { getDailySummary } from '@/lib/meals/summary'
 import { isPatientPortalEnabled } from '@/lib/settings'
 import { formatDateOnly as toDateString, today } from '@/lib/date'
@@ -15,7 +20,7 @@ import { formatDateOnly as toDateString, today } from '@/lib/date'
 const GENDER_LABELS = { MALE: 'ชาย', FEMALE: 'หญิง', OTHER: 'อื่นๆ' }
 
 export default async function AdminPatientPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireAdminPage()
+  const session = await requireAdminPage()
   const { id } = await params
 
   const [patient, comorbidities, portalEnabled] = await Promise.all([
@@ -45,7 +50,18 @@ export default async function AdminPatientPage({ params }: { params: Promise<{ i
   if (!patient) notFound()
 
   const date = today()
-  const summary = await getDailySummary(patient.id, date)
+  const [summary, weekly, frequentFoods, calculation, counts] = await Promise.all([
+    getDailySummary(patient.id, date),
+    getWeeklySummary(patient.id, date),
+    getFrequentFoods(patient.id),
+    getCalculationForDate(patient.id, date),
+    prisma.$transaction([
+      prisma.patientMeasurement.count({ where: { patientId: patient.id } }),
+      prisma.patientLab.count({ where: { patientId: patient.id } }),
+      prisma.proteinCalculation.count({ where: { patientId: patient.id } }),
+      prisma.mealItem.count({ where: { meal: { patientId: patient.id } } }),
+    ]),
+  ])
 
   return (
     <div className="flex flex-col gap-6">
@@ -58,14 +74,16 @@ export default async function AdminPatientPage({ params }: { params: Promise<{ i
 
       <ProteinTargetPanel patientId={patient.id} />
 
-      <div>
-        <h2 className="mb-2 font-medium">บันทึกอาหารให้ผู้ป่วย</h2>
-        <MealLogger
-          patientId={patient.id}
-          initialDate={toDateString(date)}
-          initialSummary={summary}
-        />
-      </div>
+      <ProteinWorkspace
+        patientId={patient.id}
+        initialDate={toDateString(date)}
+        initialSummary={summary}
+        weekly={weekly}
+        frequentFoods={frequentFoods}
+        referenceWeightKg={calculation ? num(calculation.referenceWeightKg) : null}
+        weightBasisLabel={calculation ? WEIGHT_BASIS_LABELS[calculation.weightBasis] : null}
+        weeklyHref={`/admin/patients/${patient.id}`}
+      />
 
       <HealthDataForms
         patientId={patient.id}
@@ -141,6 +159,19 @@ export default async function AdminPatientPage({ params }: { params: Promise<{ i
           </Table>
         )}
       </Card>
+      <PatientDangerZone
+        patientId={patient.id}
+        hn={patient.hn}
+        fullName={patient.fullName}
+        isActive={patient.isActive}
+        canDeletePermanently={session.role === 'SUPER_ADMIN'}
+        counts={{
+          measurements: counts[0],
+          labs: counts[1],
+          calculations: counts[2],
+          mealItems: counts[3],
+        }}
+      />
     </div>
   )
 }

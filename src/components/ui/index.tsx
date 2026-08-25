@@ -177,3 +177,45 @@ export function Table({ head, children }: { head: ReactNode[]; children: ReactNo
     </div>
   )
 }
+
+/** กล่องยืนยันกลางจอ — ใช้กับงานที่กดแล้วมีผลจริง เช่น บันทึกข้อมูลสุขภาพ / ลบผู้ป่วย */
+export function Modal({
+  title,
+  description,
+  tone = 'brand',
+  children,
+  footer,
+  onClose,
+}: {
+  title: ReactNode
+  description?: ReactNode
+  tone?: Tone
+  children?: ReactNode
+  footer?: ReactNode
+  onClose: () => void
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
+      <div
+        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-line bg-surface shadow-xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className={`rounded-t-2xl px-5 py-4 ${BADGE_STYLES[tone]}`}>
+          <h2 className="text-base font-semibold">{title}</h2>
+          {description ? <p className="mt-0.5 text-sm opacity-80">{description}</p> : null}
+        </header>
+        <div className="px-5 py-4">{children}</div>
+        {footer ? (
+          <footer className="flex justify-end gap-2 border-t border-line px-5 py-3">
+            {footer}
+          </footer>
+        ) : null}
+      </div>
+    </div>
+  )
+}
