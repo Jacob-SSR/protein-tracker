@@ -59,10 +59,12 @@ enum ConditionOperator {
 /// ACTUAL   = น้ำหนักที่ชั่งได้จริง
 /// IBW      = น้ำหนักอุดมคติ (Devine) ต้องมีส่วนสูง + เพศ
 /// ADJUSTED = ถ้า BMI >= 30 ใช้ IBW + 0.25 x (จริง - IBW) ถ้าไม่ถึงใช้น้ำหนักจริง
+/// DRY      = น้ำหนักแห้ง (หลังขจัดน้ำส่วนเกิน) ต้องกรอกมาเอง คำนวณให้ไม่ได้
 enum WeightBasis {
   ACTUAL
   IBW
   ADJUSTED
+  DRY
 }
 
 enum FoodStatus {
@@ -120,6 +122,7 @@ model User {
   mealItemChanges       MealItemHistory[]
   updatedSettings       SystemSetting[]
   authoredKnowledge     Knowledge[]
+  createdPatientInvites PatientInvite[]
 
   @@index([role])
 }
@@ -145,18 +148,44 @@ model Patient {
   comorbidities PatientComorbidity[]
   calculations  ProteinCalculation[]
   meals         Meal[]
+  invites       PatientInvite[]
+}
+
+/// รหัสเชิญให้ผู้ป่วยไปตั้งบัญชีเอง — เจ้าหน้าที่กดสร้าง ผู้ป่วยเอารหัสไปกรอกที่หน้า /register
+/// เก็บเฉพาะ hash ของรหัส รหัสจริงโชว์ให้เจ้าหน้าที่ครั้งเดียวตอนสร้างเท่านั้น
+model PatientInvite {
+  id           String    @id @default(cuid())
+  patientId    String
+  codeHash     String    @unique
+  expiresAt    DateTime
+  usedAt       DateTime?
+  usedByUserId String?
+  revokedAt    DateTime?
+  createdById  String
+  createdAt    DateTime  @default(now())
+
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  createdBy User    @relation(fields: [createdById], references: [id])
+
+  @@index([patientId, createdAt])
 }
 
 // น้ำหนัก/ส่วนสูงแยกออกจาก Patient เพื่อเก็บประวัติ ไม่ overwrite ค่าเดิม
 model PatientMeasurement {
-  id           String   @id @default(cuid())
-  patientId    String
-  measuredOn   DateTime @db.Date
-  weightKg     Decimal  @db.Decimal(6, 2)
-  heightCm     Decimal? @db.Decimal(5, 1)
-  note         String?
-  recordedById String
-  createdAt    DateTime @default(now())
+  id            String   @id @default(cuid())
+  patientId     String
+  measuredOn    DateTime @db.Date
+  weightKg      Decimal  @db.Decimal(6, 2)
+  heightCm      Decimal? @db.Decimal(5, 1)
+  /// น้ำหนักแห้ง — ค่าที่แพทย์กำหนด ไม่ใช่ค่าที่คำนวณได้ ต้องกรอกเอง
+  dryWeightKg   Decimal? @db.Decimal(6, 2)
+  /// true = บวม, false = ไม่บวม, null = ไม่ได้ประเมินครั้งนี้
+  hasEdema      Boolean?
+  /// ปริมาณน้ำที่ดื่มของวันนั้น (มล.)
+  waterIntakeMl Int?
+  note          String?
+  recordedById  String
+  createdAt     DateTime @default(now())
 
   patient    Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
   recordedBy User    @relation(fields: [recordedById], references: [id])
@@ -256,6 +285,13 @@ model ProteinCalculation {
   referenceWeightKg  Decimal     @db.Decimal(6, 2)
   proteinFactor      Decimal     @db.Decimal(5, 3)
   proteinTargetGrams Decimal     @db.Decimal(7, 2)
+  /// พลังงานที่ต้องการต่อน้ำหนักตัว 1 kg (20/25/30/35/40/45 kcal) — null = ไม่ได้กำหนด
+  energyFactorKcal   Int?
+  /// energyFactorKcal x referenceWeightKg ณ ตอนยืนยัน
+  energyTargetKcal   Decimal?    @db.Decimal(8, 2)
+  /// ระยะโรคไตที่คำนวณได้ ณ ตอนยืนยัน (G1-G5) เก็บไว้อธิบายผลย้อนหลัง
+  ckdStageCode       String?
+  egfr               Decimal?    @db.Decimal(6, 2)
   // snapshot ของ input ทั้งหมดที่ใช้คำนวณ (weight, labs, comorbidities, rule) — อ่าน/เขียนทั้งก้อน
   inputSnapshot      Json
   note               String?

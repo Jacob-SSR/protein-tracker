@@ -1,5 +1,7 @@
 import { Suspense } from 'react'
+import Link from 'next/link'
 import { LoginForm } from '@/components/login-form'
+import { isPatientPortalEnabled } from '@/lib/settings'
 
 export default async function LoginPage({
   searchParams,
@@ -7,6 +9,7 @@ export default async function LoginPage({
   searchParams: Promise<{ portal?: string }>
 }) {
   const { portal } = await searchParams
+  const portalEnabled = await isPatientPortalEnabled()
 
   return (
     <main className="flex flex-1 items-center justify-center p-6">
@@ -25,6 +28,15 @@ export default async function LoginPage({
         <Suspense fallback={null}>
           <LoginForm />
         </Suspense>
+
+        {portalEnabled ? (
+          <p className="mt-4 text-center text-sm text-muted">
+            ผู้ป่วยที่มีรหัสเชิญจากเจ้าหน้าที่{' '}
+            <Link href="/register" className="text-brand underline">
+              ลงทะเบียนที่นี่
+            </Link>
+          </p>
+        ) : null}
       </div>
     </main>
   )

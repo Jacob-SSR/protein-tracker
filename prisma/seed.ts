@@ -66,11 +66,16 @@ const SETTINGS: {
   },
 ]
 
+// โรคประจำร่วมตามแบบฟอร์มที่ใช้จริงในคลินิก
 const COMORBIDITIES = [
-  { code: 'DM', name: 'เบาหวาน' },
-  { code: 'HT', name: 'ความดันโลหิตสูง' },
-  { code: 'DIALYSIS', name: 'ฟอกไต' },
-  { code: 'OBESITY', name: 'ภาวะอ้วน' },
+  { code: 'DM', name: 'โรคเบาหวาน' },
+  { code: 'HT', name: 'โรคความดันโลหิตสูง' },
+  { code: 'OBESITY', name: 'โรคอ้วน' },
+  { code: 'PKD', name: 'โรคถุงน้ำที่ไต' },
+  { code: 'AUTOIMMUNE', name: 'โรคแพ้ภูมิตัวเอง' },
+  { code: 'NEPHRITIS', name: 'โรคไตอักเสบ' },
+  { code: 'NEPHROTIC', name: 'กลุ่มโรคไตเนโฟรติก' },
+  { code: 'OTHER', name: 'โรคอื่นๆ' },
 ]
 
 async function main() {

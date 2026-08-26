@@ -5,6 +5,7 @@ import { formatDateOnly, tomorrow } from '@/lib/date'
 import { num, round2, toDecimal } from '@/lib/decimal'
 import { badRequest, conflict } from '@/lib/errors'
 import { previewProteinTarget } from './calculator'
+import type { WeightBasis } from '@prisma/client'
 
 /**
  * ล็อกแถว patient ก่อนแตะ ProteinCalculation
@@ -21,8 +22,12 @@ export type ConfirmInput = {
   patientId: string
   confirmedById: string
   note?: string | null
-  /** ค่าที่ admin เห็นตอน preview — ถ้าไม่ตรงกับที่คำนวณสดตอน confirm จะ reject */
+  /** ค่าที่คนกดเห็นตอน preview — ถ้าไม่ตรงกับที่คำนวณสดตอน confirm จะ reject */
   expectedProteinTargetGrams?: number | null
+  /** ฐานน้ำหนักที่เลือกไว้บนหน้า preview — ไม่ส่ง = ใช้ฐานที่กฎกำหนด */
+  weightBasis?: WeightBasis | null
+  /** พลังงานต่อน้ำหนักตัว 1 kg ที่เลือกไว้ */
+  energyFactorKcal?: number | null
   ipAddress?: string | null
   userAgent?: string | null
 }
@@ -34,12 +39,16 @@ export type ConfirmInput = {
  */
 export async function confirmProteinTarget(input: ConfirmInput) {
   const effectiveFrom = tomorrow()
-  const preview = await previewProteinTarget(input.patientId, effectiveFrom)
+  const preview = await previewProteinTarget(input.patientId, effectiveFrom, {
+    weightBasis: input.weightBasis,
+    energyFactorKcal: input.energyFactorKcal,
+  })
 
   const selected = preview.selected
   const proteinFactor = preview.proteinFactor
   const proteinTargetGrams = preview.proteinTargetGrams
   const referenceWeightKg = preview.referenceWeightKg
+  const weightBasis = preview.weightBasis ?? selected?.weightBasis ?? 'ACTUAL'
 
   if (!selected || proteinFactor === null) {
     throw badRequest(
@@ -90,13 +99,21 @@ export async function confirmProteinTarget(input: ConfirmInput) {
         ruleId: selected.ruleId,
         ruleVersion: selected.ruleVersion,
         ruleNameSnapshot: selected.ruleName,
-        weightBasis: selected.weightBasis,
+        weightBasis,
         referenceWeightKg: toDecimal(referenceWeightKg),
         proteinFactor: toDecimal(proteinFactor),
         proteinTargetGrams: toDecimal(proteinTargetGrams),
+        energyFactorKcal: preview.energyFactorKcal ?? null,
+        energyTargetKcal:
+          preview.energyTargetKcal === null ? null : toDecimal(preview.energyTargetKcal),
+        ckdStageCode: preview.ckd?.code ?? null,
+        egfr: preview.ckd?.egfr == null ? null : toDecimal(preview.ckd.egfr),
         inputSnapshot: {
           facts: preview.facts,
           selectedRule: selected,
+          weightBasisSource: preview.weightBasisSource,
+          suggestedWeightBasis: preview.suggestedWeightBasis,
+          ckd: preview.ckd,
         } as unknown as Prisma.InputJsonValue,
         note: input.note ?? null,
         effectiveFrom,
@@ -120,6 +137,9 @@ export async function confirmProteinTarget(input: ConfirmInput) {
         id: created.id,
         proteinTargetGrams,
         proteinFactor,
+        weightBasis,
+        energyTargetKcal: preview.energyTargetKcal,
+        ckdStageCode: preview.ckd?.code ?? null,
         effectiveFrom: formatDateOnly(effectiveFrom),
       },
       ipAddress: input.ipAddress,
@@ -131,7 +151,9 @@ export async function confirmProteinTarget(input: ConfirmInput) {
       proteinTargetGrams,
       proteinFactor,
       referenceWeightKg,
-      weightBasis: selected.weightBasis,
+      weightBasis,
+      energyTargetKcal: preview.energyTargetKcal,
+      ckdStageCode: preview.ckd?.code ?? null,
       effectiveFrom: formatDateOnly(effectiveFrom),
       previousId: active?.id ?? null,
     }

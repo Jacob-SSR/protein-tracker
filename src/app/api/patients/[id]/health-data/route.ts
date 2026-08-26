@@ -4,7 +4,6 @@ import { prisma } from '@/lib/db/prisma'
 import { requestMeta, writeAudit } from '@/lib/audit'
 import { parseDateOnly } from '@/lib/date'
 import { toDecimal } from '@/lib/decimal'
-import { ADMIN_ROLES } from '@/lib/permissions'
 import { requirePatientAccess } from '@/lib/patients/access'
 import { badRequest } from '@/lib/errors'
 
@@ -15,6 +14,12 @@ const bodySchema = z.object({
   measuredOn: z.string(),
   weightKg: z.number().positive().max(500).optional(),
   heightCm: z.number().positive().max(300).optional(),
+  /** น้ำหนักแห้ง — ค่าที่แพทย์กำหนดให้ ไม่ได้คำนวณเอง */
+  dryWeightKg: z.number().positive().max(500).optional(),
+  /** true = บวม, false = ไม่บวม, ไม่ส่ง = ไม่ได้ประเมินครั้งนี้ */
+  hasEdema: z.boolean().optional(),
+  /** ปริมาณน้ำที่ดื่มวันนี้ (มล.) */
+  waterIntakeMl: z.number().int().min(0).max(20000).optional(),
   labs: z
     .array(
       z.object({
@@ -30,13 +35,15 @@ const bodySchema = z.object({
 })
 
 /**
- * บันทึกข้อมูลสุขภาพทั้งชุดในครั้งเดียว (น้ำหนัก + ผลเลือด + โรคร่วม)
- * หนึ่งครั้งที่เจ้าหน้าที่กดบันทึก = หนึ่งทรานแซคชัน = หนึ่งแถวใน Audit Log
+ * บันทึกข้อมูลสุขภาพทั้งชุดในครั้งเดียว (น้ำหนัก + ภาวะบวม + น้ำที่ดื่ม + ผลเลือด + โรคร่วม)
+ * หนึ่งครั้งที่กดบันทึก = หนึ่งทรานแซคชัน = หนึ่งแถวใน Audit Log
  * ถ้าส่วนใดส่วนหนึ่งพัง จะไม่มีอะไรถูกบันทึกเลย ไม่เหลือข้อมูลค้างครึ่งๆ กลางๆ
+ *
+ * ผู้ป่วยบันทึกของตัวเองได้ — requirePatientAccess กันการยิงใส่ id ของคนอื่น
  */
 export async function POST(request: Request, { params }: Params) {
   return handle(async () => {
-    const session = await requireSession(ADMIN_ROLES)
+    const session = await requireSession()
     const { id } = await params
     await requirePatientAccess(session, id)
 
@@ -45,7 +52,18 @@ export async function POST(request: Request, { params }: Params) {
     const labs = body.labs?.map((lab) => ({ ...lab, labType: lab.labType.toUpperCase() })) ?? []
 
     const hasWeight = body.weightKg !== undefined
+    const hasDailyExtras =
+      body.dryWeightKg !== undefined ||
+      body.hasEdema !== undefined ||
+      body.waterIntakeMl !== undefined
     const changesComorbidity = body.comorbidityCodes != null
+    // น้ำหนักแห้ง/บวม/น้ำ อยู่บนแถว measurement เดียวกัน — ต้องมีน้ำหนักถึงจะสร้างแถวได้
+    if (hasDailyExtras && !hasWeight) {
+      throw badRequest(
+        'WEIGHT_REQUIRED',
+        'ต้องกรอกน้ำหนักด้วย จึงจะบันทึกภาวะบวม/น้ำหนักแห้ง/น้ำที่ดื่มได้',
+      )
+    }
     if (!hasWeight && labs.length === 0 && !changesComorbidity) {
       throw badRequest('NOTHING_TO_SAVE', 'ยังไม่มีข้อมูลให้บันทึก')
     }
@@ -69,6 +87,9 @@ export async function POST(request: Request, { params }: Params) {
             measuredOn,
             weightKg: toDecimal(body.weightKg!),
             heightCm: body.heightCm ? toDecimal(body.heightCm) : null,
+            dryWeightKg: body.dryWeightKg ? toDecimal(body.dryWeightKg) : null,
+            hasEdema: body.hasEdema ?? null,
+            waterIntakeMl: body.waterIntakeMl ?? null,
             recordedById: session.userId,
           },
         })
@@ -90,7 +111,10 @@ export async function POST(request: Request, { params }: Params) {
       result.labs = labs.length
 
       if (changesComorbidity) {
-        await tx.patientComorbidity.updateMany({ where: { patientId: id }, data: { isActive: false } })
+        await tx.patientComorbidity.updateMany({
+          where: { patientId: id },
+          data: { isActive: false },
+        })
         for (const comorbidity of comorbidities) {
           await tx.patientComorbidity.upsert({
             where: { patientId_comorbidityId: { patientId: id, comorbidityId: comorbidity.id } },
@@ -110,6 +134,9 @@ export async function POST(request: Request, { params }: Params) {
           measuredOn: body.measuredOn,
           weightKg: body.weightKg ?? null,
           heightCm: body.heightCm ?? null,
+          dryWeightKg: body.dryWeightKg ?? null,
+          hasEdema: body.hasEdema ?? null,
+          waterIntakeMl: body.waterIntakeMl ?? null,
           labs,
           comorbidityCodes: changesComorbidity ? comorbidities.map((c) => c.code) : null,
         },

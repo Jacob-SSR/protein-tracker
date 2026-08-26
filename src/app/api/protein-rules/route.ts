@@ -10,7 +10,7 @@ export const ruleBodySchema = z.object({
   description: z.string().trim().max(500).optional(),
   priority: z.number().int().min(1).max(9999),
   /** ฐานน้ำหนักที่จะเอาไปคูณกับ proteinFactor */
-  weightBasis: z.enum(['ACTUAL', 'IBW', 'ADJUSTED']).default('ACTUAL'),
+  weightBasis: z.enum(['ACTUAL', 'IBW', 'ADJUSTED', 'DRY']).default('ACTUAL'),
   /** g โปรตีน / kg น้ำหนักตัว / วัน — ใช้ค่าเดียวทั้งกฎ */
   proteinFactor: z.number().min(0.1).max(5),
   isActive: z.boolean().default(true),

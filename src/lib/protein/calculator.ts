@@ -2,7 +2,16 @@ import { prisma } from '@/lib/db/prisma'
 import { formatDateOnly, today } from '@/lib/date'
 import { num, round2 } from '@/lib/decimal'
 import { notFound, badRequest } from '@/lib/errors'
-import type { Gender } from '@prisma/client'
+import {
+  adjustedBodyWeightKg,
+  bmiOf,
+  ckdStageFromEgfr,
+  energyTargetKcal,
+  estimateEgfr,
+  idealBodyWeightKg,
+  suggestedWeightBasis,
+  type CkdStage,
+} from './body-metrics'
 import {
   resolveReferenceWeight,
   selectRule,
@@ -17,48 +26,38 @@ export type ProteinPreview = {
   facts: PatientFacts
   evaluations: RuleEvaluation[]
   selected: RuleEvaluation | null
-  /** น้ำหนักที่ถูกนำไปคูณจริงตามฐานของกฎที่เลือก */
+  /** น้ำหนักที่ถูกนำไปคูณจริงตามฐานที่เลือกใช้ */
   referenceWeightKg: number | null
+  /** ฐานน้ำหนักที่ใช้จริงในการคำนวณรอบนี้ */
   weightBasis: WeightBasis | null
   weightBasisLabel: string | null
-  /** เหตุผลที่คำนวณไม่ได้ เช่น กฎใช้ IBW แต่ไม่มีส่วนสูง */
+  /** ฐานมาจากไหน: กฎกำหนด / คนเลือกเอง */
+  weightBasisSource: 'RULE' | 'MANUAL'
+  /** ฐานที่ระบบแนะนำจากระยะไต — ระยะ 3 ขึ้นไปใช้ IBW, ระยะ 1-2 ใช้น้ำหนักจริง */
+  suggestedWeightBasis: WeightBasis | null
+  ckd: (CkdStage & { egfr: number | null; egfrSource: 'LAB' | 'ESTIMATED' | null }) | null
+  /** เหตุผลที่คำนวณไม่ได้ เช่น ใช้ IBW แต่ไม่มีส่วนสูง */
   blockedReason: string | null
   proteinFactor: number | null
   proteinTargetGrams: number | null
+  energyFactorKcal: number | null
+  energyTargetKcal: number | null
   /** วันที่เป้าหมายใหม่จะเริ่มมีผล (พรุ่งนี้เสมอ) */
   effectiveFrom: string
   current: {
     id: string
     proteinTargetGrams: number
     proteinFactor: number
+    energyTargetKcal: number | null
     effectiveFrom: string
   } | null
 }
 
-/**
- * น้ำหนักอุดมคติ สูตร Devine
- *   ชาย   50   + 2.3 x (ส่วนสูงเป็นนิ้ว - 60)
- *   หญิง  45.5 + 2.3 x (ส่วนสูงเป็นนิ้ว - 60)
- * ต้องมีทั้งส่วนสูงและเพศชาย/หญิง — เพศ OTHER หรือไม่ระบุ คำนวณไม่ได้
- */
-function idealBodyWeight(heightCm: number | null, gender: Gender | null): number | null {
-  if (!heightCm || (gender !== 'MALE' && gender !== 'FEMALE')) return null
-  const inches = heightCm / 2.54
-  const base = gender === 'MALE' ? 50 : 45.5
-  const ibw = base + 2.3 * (inches - 60)
-  // คนตัวเล็กมากสูตรนี้ให้ค่าติดลบได้ ตัดพื้นไว้ที่ 30 kg กันค่าประหลาด
-  return round2(Math.max(ibw, 30))
-}
-
-/** BMI >= 30 ใช้ IBW + 0.25 x (จริง - IBW) ไม่ถึงใช้น้ำหนักจริง */
-function adjustedBodyWeight(
-  actualKg: number,
-  ibwKg: number | null,
-  bmi: number | null,
-): number | null {
-  if (ibwKg === null) return null
-  if (bmi === null || bmi < 30) return actualKg
-  return round2(ibwKg + 0.25 * (actualKg - ibwKg))
+export type PreviewOptions = {
+  /** ฐานน้ำหนักที่คนเลือกเอง — ไม่ส่งมา = ใช้ฐานที่กฎกำหนด */
+  weightBasis?: WeightBasis | null
+  /** พลังงานต่อน้ำหนักตัว 1 kg (20-45 kcal) */
+  energyFactorKcal?: number | null
 }
 
 function ageInYears(birthDate: Date | null, asOf: Date): number | null {
@@ -79,7 +78,7 @@ export async function buildPatientFacts(patientId: string, asOf: Date): Promise<
       measurements: {
         where: { measuredOn: { lte: asOf } },
         orderBy: [{ measuredOn: 'desc' }, { createdAt: 'desc' }],
-        take: 1,
+        take: 30,
       },
       labs: {
         where: { measuredOn: { lte: asOf } },
@@ -100,8 +99,13 @@ export async function buildPatientFacts(patientId: string, asOf: Date): Promise<
   }
 
   const weightKg = num(measurement.weightKg)
-  const heightCm = measurement.heightCm ? num(measurement.heightCm) : null
-  const bmi = heightCm && heightCm > 0 ? round2(weightKg / (heightCm / 100) ** 2) : null
+  // ส่วนสูง/น้ำหนักแห้ง/ภาวะบวม ไม่ได้กรอกทุกครั้ง — ถอยไปหาค่าล่าสุดที่เคยกรอกไว้
+  const heightRow = patient.measurements.find((row) => row.heightCm !== null)
+  const dryRow = patient.measurements.find((row) => row.dryWeightKg !== null)
+  const edemaRow = patient.measurements.find((row) => row.hasEdema !== null)
+  const heightCm = heightRow ? num(heightRow.heightCm) : null
+
+  const bmi = bmiOf(weightKg, heightCm)
 
   // ผลเลือด: เก็บเฉพาะแถวล่าสุดของแต่ละ labType (labs เรียง desc มาแล้ว)
   const labs: PatientFacts['labs'] = {}
@@ -117,18 +121,36 @@ export async function buildPatientFacts(patientId: string, asOf: Date): Promise<
   }
 
   const comorbidityCodes = patient.comorbidities.map((row) => row.comorbidity.code.toUpperCase())
-  const ibwKg = idealBodyWeight(heightCm, patient.gender)
+  const ibwKg = idealBodyWeightKg(heightCm, patient.gender)
+  const ageYears = ageInYears(patient.birthDate, asOf)
+
+  // ผลแล็บ eGFR ถ้าหมอส่งมาเองถือว่าแม่นกว่า ไม่มีค่อยคำนวณจาก Cr
+  const labEgfr = labs.EGFR?.value ?? null
+  const estimated = estimateEgfr({
+    creatinineMgDl: labs.CREATININE?.value ?? labs.CR?.value ?? null,
+    ageYears,
+    gender: patient.gender,
+  })
+  const egfr = labEgfr ?? estimated
+  const stage = ckdStageFromEgfr(egfr)
 
   return {
     patientId,
     asOf: formatDateOnly(asOf),
-    ageYears: ageInYears(patient.birthDate, asOf),
+    ageYears,
     gender: patient.gender,
     weightKg,
     heightCm,
     bmi,
     ibwKg,
-    adjustedWeightKg: adjustedBodyWeight(weightKg, ibwKg, bmi),
+    adjustedWeightKg: adjustedBodyWeightKg(weightKg, ibwKg, bmi),
+    dryWeightKg: dryRow ? num(dryRow.dryWeightKg) : null,
+    hasEdema: edemaRow?.hasEdema ?? null,
+    waterIntakeMl: measurement.waterIntakeMl ?? null,
+    egfr,
+    egfrSource: egfr === null ? null : labEgfr !== null ? 'LAB' : 'ESTIMATED',
+    ckdStage: stage?.stage ?? null,
+    ckdStageCode: stage?.code ?? null,
     labs,
     comorbidityCodes,
     isDialysis: comorbidityCodes.includes('DIALYSIS'),
@@ -142,6 +164,7 @@ export async function buildPatientFacts(patientId: string, asOf: Date): Promise<
 export async function previewProteinTarget(
   patientId: string,
   effectiveFrom: Date,
+  options: PreviewOptions = {},
 ): Promise<ProteinPreview> {
   const facts = await buildPatientFacts(patientId, today())
 
@@ -165,14 +188,20 @@ export async function previewProteinTarget(
   const current = await getActiveCalculation(patientId)
 
   const proteinFactor = selected?.proteinFactor ?? null
-  // น้ำหนักที่คูณขึ้นกับฐานที่กฎกำหนด ไม่ใช่น้ำหนักที่ชั่งได้เสมอไป
-  const reference = selected
-    ? resolveReferenceWeight(facts, selected.weightBasis)
+  const suggested = suggestedWeightBasis(facts.ckdStage)
+  // คนเลือกเองมาก่อน ไม่เลือกก็ใช้ฐานที่กฎกำหนดไว้
+  const weightBasis = options.weightBasis ?? selected?.weightBasis ?? null
+  const weightBasisSource = options.weightBasis ? 'MANUAL' : 'RULE'
+
+  const reference = weightBasis
+    ? resolveReferenceWeight(facts, weightBasis)
     : { weightKg: null, reason: undefined }
   const proteinTargetGrams =
     proteinFactor === null || reference.weightKg === null
       ? null
       : round2(proteinFactor * reference.weightKg)
+
+  const stage = ckdStageFromEgfr(facts.egfr)
 
   return {
     patientId,
@@ -180,17 +209,23 @@ export async function previewProteinTarget(
     evaluations,
     selected,
     referenceWeightKg: reference.weightKg,
-    weightBasis: selected?.weightBasis ?? null,
-    weightBasisLabel: selected ? WEIGHT_BASIS_LABELS[selected.weightBasis] : null,
+    weightBasis,
+    weightBasisLabel: weightBasis ? WEIGHT_BASIS_LABELS[weightBasis] : null,
+    weightBasisSource,
+    suggestedWeightBasis: suggested,
+    ckd: stage ? { ...stage, egfr: facts.egfr, egfrSource: facts.egfrSource } : null,
     blockedReason: reference.reason ?? null,
     proteinFactor,
     proteinTargetGrams,
+    energyFactorKcal: options.energyFactorKcal ?? null,
+    energyTargetKcal: energyTargetKcal(options.energyFactorKcal, reference.weightKg),
     effectiveFrom: formatDateOnly(effectiveFrom),
     current: current
       ? {
           id: current.id,
           proteinTargetGrams: num(current.proteinTargetGrams),
           proteinFactor: num(current.proteinFactor),
+          energyTargetKcal: current.energyTargetKcal ? num(current.energyTargetKcal) : null,
           effectiveFrom: formatDateOnly(current.effectiveFrom),
         }
       : null,

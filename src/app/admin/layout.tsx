@@ -6,6 +6,7 @@ import {
   IconBook,
   IconChart,
   IconList,
+  IconClock,
   IconSettings,
   IconShield,
   IconTarget,
@@ -27,6 +28,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   const nav = [
     { href: '/admin/patients', label: 'ผู้ป่วย', icon: <IconUser /> },
+    { href: '/admin/invites', label: 'คำเชิญลงทะเบียน', icon: <IconClock /> },
     { href: '/admin/foods', label: 'ฐานข้อมูลอาหาร', icon: <IconList /> },
     { href: '/admin/protein-rules', label: 'กฎคำนวณโปรตีน', icon: <IconTarget /> },
     { href: '/admin/knowledge', label: 'บทความความรู้', icon: <IconBook /> },

@@ -15,6 +15,7 @@ import { PatientAccountPanel } from '@/components/patient-account-panel'
 import { PatientDangerZone } from '@/components/patient-danger-zone'
 import { getDailySummary } from '@/lib/meals/summary'
 import { isPatientPortalEnabled } from '@/lib/settings'
+import { getActiveInvite } from '@/lib/patients/invites'
 import { formatDateOnly as toDateString, today } from '@/lib/date'
 
 const GENDER_LABELS = { MALE: 'ชาย', FEMALE: 'หญิง', OTHER: 'อื่นๆ' }
@@ -49,7 +50,21 @@ export default async function AdminPatientPage({ params }: { params: Promise<{ i
 
   if (!patient) notFound()
 
+  const latestHeight = patient.measurements.find((row) => row.heightCm !== null)
+  const patientAgeYears = (() => {
+    if (!patient.birthDate) return null
+    const now = new Date()
+    let age = now.getUTCFullYear() - patient.birthDate.getUTCFullYear()
+    const before =
+      now.getUTCMonth() < patient.birthDate.getUTCMonth() ||
+      (now.getUTCMonth() === patient.birthDate.getUTCMonth() &&
+        now.getUTCDate() < patient.birthDate.getUTCDate())
+    if (before) age -= 1
+    return age >= 0 ? age : null
+  })()
+
   const date = today()
+  const activeInvite = patient.userId ? null : await getActiveInvite(patient.id)
   const [summary, weekly, frequentFoods, calculation, counts] = await Promise.all([
     getDailySummary(patient.id, date),
     getWeeklySummary(patient.id, date),
@@ -87,12 +102,22 @@ export default async function AdminPatientPage({ params }: { params: Promise<{ i
 
       <HealthDataForms
         patientId={patient.id}
+        patient={{
+          gender: patient.gender,
+          ageYears: patientAgeYears,
+          heightCm: latestHeight ? num(latestHeight.heightCm) : null,
+        }}
         comorbidities={comorbidities}
         selectedCodes={patient.comorbidities.map((row) => row.comorbidity.code)}
       />
 
       {portalEnabled ? (
-        <PatientAccountPanel patientId={patient.id} username={patient.user?.username ?? null} />
+        <PatientAccountPanel
+          patientId={patient.id}
+          hn={patient.hn}
+          username={patient.user?.username ?? null}
+          activeInvite={activeInvite ? { expiresAt: activeInvite.expiresAt.toISOString() } : null}
+        />
       ) : null}
 
       <Card title="ประวัติน้ำหนัก / ส่วนสูง">

@@ -21,7 +21,7 @@ type ConditionType =
   | 'DIALYSIS'
 
 type Operator = 'LT' | 'LTE' | 'GT' | 'GTE' | 'EQ' | 'NEQ'
-type WeightBasis = 'ACTUAL' | 'IBW' | 'ADJUSTED'
+type WeightBasis = 'ACTUAL' | 'IBW' | 'ADJUSTED' | 'DRY'
 
 type Condition = {
   conditionType: ConditionType
@@ -71,12 +71,17 @@ const WEIGHT_BASIS_OPTIONS: { value: WeightBasis; label: string; hint: string }[
   {
     value: 'IBW',
     label: 'น้ำหนักอุดมคติ (IBW)',
-    hint: 'สูตร Devine — ต้องมีส่วนสูงและเพศของผู้ป่วย',
+    hint: 'ชาย = ส่วนสูง − 100, หญิง = ส่วนสูง − 105 — ต้องมีส่วนสูงและเพศของผู้ป่วย',
   },
   {
     value: 'ADJUSTED',
     label: 'น้ำหนักปรับ (Adjusted BW)',
     hint: 'BMI ≥ 30 ใช้ IBW + 0.25 × (จริง − IBW) ถ้าไม่ถึงใช้น้ำหนักจริง',
+  },
+  {
+    value: 'DRY',
+    label: 'น้ำหนักแห้ง (Dry Weight)',
+    hint: 'ต้องมีคนกรอกน้ำหนักแห้งไว้ในหน้าบันทึกข้อมูลสุขภาพก่อน',
   },
 ]
 

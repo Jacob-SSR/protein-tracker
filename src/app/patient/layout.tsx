@@ -2,7 +2,7 @@ import { requirePatientPage } from '@/lib/auth/guards'
 import { prisma } from '@/lib/db/prisma'
 import { MobileNav, Sidebar } from '@/components/shell/sidebar'
 import { Topbar } from '@/components/shell/topbar'
-import { IconBook, IconChart, IconHome, IconList, IconMeal } from '@/components/icons'
+import { IconBook, IconChart, IconHome, IconList, IconMeal, IconUser } from '@/components/icons'
 
 export default async function PatientLayout({ children }: { children: React.ReactNode }) {
   const session = await requirePatientPage()
@@ -15,6 +15,7 @@ export default async function PatientLayout({ children }: { children: React.Reac
   const nav = [
     { href: '/patient/dashboard', label: 'หน้าหลัก', icon: <IconHome /> },
     { href: '/patient/meals', label: 'บันทึกอาหาร', icon: <IconMeal /> },
+    { href: '/patient/health', label: 'บันทึกข้อมูลสุขภาพ', icon: <IconUser /> },
     { href: '/patient/weekly', label: 'สรุปรายสัปดาห์', icon: <IconChart /> },
     { href: '/patient/foods', label: 'เสนออาหารใหม่', icon: <IconList /> },
     { href: '/patient/knowledge', label: 'ความรู้', icon: <IconBook /> },

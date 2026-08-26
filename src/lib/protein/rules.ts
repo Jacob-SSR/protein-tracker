@@ -20,6 +20,18 @@ export type PatientFacts = {
   ibwKg: number | null
   /** BMI >= 30 ใช้ IBW + 0.25 x (จริง - IBW), ไม่ถึงใช้น้ำหนักจริง — null เมื่อคำนวณ IBW ไม่ได้ */
   adjustedWeightKg: number | null
+  /** น้ำหนักแห้งที่บันทึกไว้ล่าสุด — คำนวณเองไม่ได้ ต้องมีคนกรอก */
+  dryWeightKg: number | null
+  /** true = บวม, false = ไม่บวม, null = ยังไม่เคยประเมิน */
+  hasEdema: boolean | null
+  /** ปริมาณน้ำที่ดื่มของวันล่าสุดที่บันทึก (มล.) */
+  waterIntakeMl: number | null
+  /** eGFR ที่ใช้จริง — ผลแล็บถ้ามี ไม่มีก็คำนวณจาก Cr (CKD-EPI 2021) */
+  egfr: number | null
+  egfrSource: 'LAB' | 'ESTIMATED' | null
+  /** ระยะโรคไต 1-5 (3a/3b นับเป็น 3) — null เมื่อไม่รู้ eGFR */
+  ckdStage: number | null
+  ckdStageCode: string | null
   /** ผลเลือดล่าสุดของแต่ละ labType (key เป็นตัวพิมพ์ใหญ่เสมอ) */
   labs: Record<string, { value: number; unit: string | null; measuredOn: string }>
   comorbidityCodes: string[]
@@ -84,6 +96,11 @@ function numericFact(facts: PatientFacts, type: ConditionType): number | null {
       return facts.ageYears
     case 'WEIGHT':
       return facts.weightKg
+    case 'CKD_STAGE':
+      // ระยะไตเป็นค่าที่ระบบคำนวณเอง ไม่ใช่ผลแล็บ — ถ้าคำนวณไม่ได้ค่อยถอยไปดูที่แล็บ
+      return facts.ckdStage ?? facts.labs.CKD_STAGE?.value ?? null
+    case 'EGFR':
+      return facts.egfr ?? null
     default:
       return facts.labs[type]?.value ?? null
   }
@@ -211,6 +228,16 @@ export function resolveReferenceWeight(
 ): { weightKg: number | null; reason?: string } {
   if (weightBasis === 'ACTUAL') return { weightKg: facts.weightKg }
 
+  if (weightBasis === 'DRY') {
+    if (facts.dryWeightKg === null) {
+      return {
+        weightKg: null,
+        reason: 'ยังไม่มีน้ำหนักแห้งของผู้ป่วย — กรอกในหน้าบันทึกข้อมูลสุขภาพก่อน',
+      }
+    }
+    return { weightKg: facts.dryWeightKg }
+  }
+
   if (facts.ibwKg === null) {
     return {
       weightKg: null,
@@ -222,7 +249,8 @@ export function resolveReferenceWeight(
 }
 
 export const WEIGHT_BASIS_LABELS: Record<WeightBasis, string> = {
-  ACTUAL: 'น้ำหนักจริง',
-  IBW: 'น้ำหนักอุดมคติ (IBW)',
+  ACTUAL: 'น้ำหนักจริง (Actual)',
+  IBW: 'น้ำหนักอุดมคติ (Ideal Body Weight)',
   ADJUSTED: 'น้ำหนักปรับ (Adjusted BW)',
+  DRY: 'น้ำหนักแห้ง (Dry Weight)',
 }
