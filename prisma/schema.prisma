@@ -475,6 +475,10 @@ model Knowledge {
   imageUrl      String?
   /// public_id ของ Cloudinary ไว้ใช้ลบไฟล์ทีหลัง
   imagePublicId String?
+  /// ขนาดจริงของรูป — Cloudinary ส่งมาตอนอัปโหลด เก็บไว้เพื่อให้แสดงรูปได้เต็ม
+  /// ตามสัดส่วนจริงโดยไม่ครอป และจองพื้นที่ไว้ล่วงหน้าไม่ให้หน้ากระตุก
+  imageWidth    Int?
+  imageHeight   Int?
   /// ลิงก์เว็บไซต์ต้นทาง — กดที่รูปแล้วไปที่นี่ ไม่ใช่ไปเปิดไฟล์รูปบน Cloudinary
   linkUrl       String?
   linkLabel     String?

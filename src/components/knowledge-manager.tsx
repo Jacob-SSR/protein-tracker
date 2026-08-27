@@ -2,7 +2,17 @@
 
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { Alert, Badge, Button, Card, EmptyState, Field, Input, Textarea } from '@/components/ui'
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Field,
+  Input,
+  Modal,
+  Textarea,
+} from '@/components/ui'
 import { KnowledgeImageField, type ArticleMedia } from '@/components/knowledge-image-field'
 import { request } from '@/lib/client/api'
 
@@ -13,6 +23,8 @@ type Article = {
   content: string
   imageUrl: string | null
   imagePublicId: string | null
+  imageWidth: number | null
+  imageHeight: number | null
   linkUrl: string | null
   linkLabel: string | null
   version: number
@@ -32,6 +44,8 @@ type Draft = ArticleMedia & {
 const emptyMedia: ArticleMedia = {
   imageUrl: null,
   imagePublicId: null,
+  imageWidth: null,
+  imageHeight: null,
   linkUrl: '',
   linkLabel: '',
 }
@@ -40,6 +54,8 @@ function mediaOf(article: Article): ArticleMedia {
   return {
     imageUrl: article.imageUrl,
     imagePublicId: article.imagePublicId,
+    imageWidth: article.imageWidth,
+    imageHeight: article.imageHeight,
     linkUrl: article.linkUrl ?? '',
     linkLabel: article.linkLabel ?? '',
   }
@@ -54,6 +70,11 @@ export function KnowledgeManager({
 }) {
   const router = useRouter()
   const [draft, setDraft] = useState<Draft | null>(null)
+  const [deleting, setDeleting] = useState<{
+    slug: string
+    title: string
+    versions: number
+  } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
@@ -73,6 +94,8 @@ export function KnowledgeManager({
       const media = {
         imageUrl: draft.imageUrl,
         imagePublicId: draft.imagePublicId,
+        imageWidth: draft.imageWidth,
+        imageHeight: draft.imageHeight,
         linkUrl: draft.linkUrl.trim() || null,
         linkLabel: draft.linkLabel.trim() || null,
       }
@@ -109,9 +132,36 @@ export function KnowledgeManager({
     }
   }
 
+  async function remove() {
+    if (!deleting) return
+    setError(null)
+    setNotice(null)
+    setPending(true)
+    try {
+      const result = await request<{
+        deleted: { versions: number }
+        images: { deleted: number; failed: string[] }
+      }>(`/api/knowledge/${deleting.slug}`, { method: 'DELETE' })
+
+      const parts = [`ลบ "${deleting.title}" แล้ว (${result.deleted.versions} เวอร์ชัน)`]
+      if (result.images.deleted > 0) parts.push(`ลบรูปบน Cloudinary ${result.images.deleted} ไฟล์`)
+      if (result.images.failed.length > 0) {
+        parts.push(`แต่ลบรูปไม่สำเร็จ ${result.images.failed.length} ไฟล์ ต้องไปลบเองใน Cloudinary`)
+      }
+
+      setDeleting(null)
+      setNotice(parts.join(' · '))
+      router.refresh()
+    } catch (cause) {
+      setError((cause as Error).message)
+    } finally {
+      setPending(false)
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
-      {error ? <Alert>{error}</Alert> : null}
+      {error && !deleting ? <Alert>{error}</Alert> : null}
       {notice ? <Alert tone="ok">{notice}</Alert> : null}
 
       {draft ? (
@@ -205,22 +255,37 @@ export function KnowledgeManager({
                       </p>
                       <p className="font-mono text-xs text-muted">{slug}</p>
                     </div>
-                    <Button
-                      variant="secondary"
-                      disabled={pending}
-                      onClick={() =>
-                        setDraft({
-                          slug,
-                          title: latest.title,
-                          content: latest.content,
-                          ...mediaOf(latest),
-                          isPublished: latest.isPublished,
-                          isNew: false,
-                        })
-                      }
-                    >
-                      แก้ไข
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="secondary"
+                        disabled={pending}
+                        onClick={() =>
+                          setDraft({
+                            slug,
+                            title: latest.title,
+                            content: latest.content,
+                            ...mediaOf(latest),
+                            isPublished: latest.isPublished,
+                            isNew: false,
+                          })
+                        }
+                      >
+                        แก้ไข
+                      </Button>
+                      <Button
+                        variant="danger"
+                        disabled={pending}
+                        onClick={() =>
+                          setDeleting({
+                            slug,
+                            title: latest.title,
+                            versions: versions.length,
+                          })
+                        }
+                      >
+                        ลบ
+                      </Button>
+                    </div>
                   </div>
                   <ul className="mt-2 flex flex-col gap-1 text-xs text-muted">
                     {versions.map((version) => (
@@ -237,6 +302,37 @@ export function KnowledgeManager({
           </ul>
         )}
       </Card>
+
+      {deleting ? (
+        <Modal
+          tone="danger"
+          title={`ลบบทความ "${deleting.title}"`}
+          description="การกระทำนี้ย้อนกลับไม่ได้"
+          onClose={() => setDeleting(null)}
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setDeleting(null)} disabled={pending}>
+                ยกเลิก
+              </Button>
+              <Button variant="danger" onClick={remove} disabled={pending}>
+                {pending ? 'กำลังลบ...' : 'ลบถาวร'}
+              </Button>
+            </>
+          }
+        >
+          <div className="flex flex-col gap-3 text-sm">
+            {error ? <Alert>{error}</Alert> : null}
+            <p>
+              จะลบ <strong>ทุกเวอร์ชัน</strong> ของบทความนี้ ({deleting.versions} เวอร์ชัน)
+              ผู้ป่วยจะไม่เห็นบทความนี้อีก
+            </p>
+            <p className="text-muted">
+              ไฟล์รูปบน Cloudinary ถูกลบตามไปด้วย เฉพาะรูปที่ไม่มีบทความอื่นใช้อยู่ —
+              รูปที่ใช้ร่วมกับบทความอื่นจะไม่ถูกแตะ
+            </p>
+          </div>
+        </Modal>
+      ) : null}
     </div>
   )
 }

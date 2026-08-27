@@ -94,3 +94,40 @@ export function assertSafeExternalUrl(url: string): string {
 
   return parsed.toString()
 }
+
+/**
+ * ลบไฟล์ออกจาก Cloudinary
+ *
+ * เรียกหลังลบแถวใน DB แล้วเท่านั้น และคืน public_id ที่ลบไม่สำเร็จกลับมา
+ * ตั้งใจไม่ให้ throw — DB เป็นแหล่งความจริง ถ้าลบไฟล์พลาดก็แค่มีไฟล์ค้าง
+ * ไม่ควรทำให้การลบบทความทั้งก้อนล้มเหลวตาม
+ */
+export async function destroyImages(publicIds: string[]): Promise<{ failed: string[] }> {
+  if (publicIds.length === 0) return { failed: [] }
+
+  const { cloudName, apiKey, apiSecret } = getCloudinaryConfig()
+  const endpoint = `https://api.cloudinary.com/v1_1/${cloudName}/image/destroy`
+  const failed: string[] = []
+
+  for (const publicId of publicIds) {
+    try {
+      const timestamp = Math.floor(Date.now() / 1000)
+      const form = new FormData()
+      form.append('public_id', publicId)
+      form.append('api_key', apiKey)
+      form.append('timestamp', String(timestamp))
+      form.append('signature', signUploadParams({ public_id: publicId, timestamp }, apiSecret))
+
+      const response = await fetch(endpoint, { method: 'POST', body: form })
+      const payload = (await response.json()) as { result?: string }
+      // "not found" = ไฟล์ถูกลบไปแล้ว ถือว่าสำเร็จตามที่ตั้งใจ
+      if (!response.ok || (payload.result !== 'ok' && payload.result !== 'not found')) {
+        failed.push(publicId)
+      }
+    } catch {
+      failed.push(publicId)
+    }
+  }
+
+  return { failed }
+}

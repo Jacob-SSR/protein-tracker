@@ -37,6 +37,8 @@ const createSchema = z.object({
   content: z.string().trim().min(1).max(20000),
   imageUrl: z.string().trim().url().max(500).nullish(),
   imagePublicId: z.string().trim().max(200).nullish(),
+  imageWidth: z.number().int().positive().max(20000).nullish(),
+  imageHeight: z.number().int().positive().max(20000).nullish(),
   linkUrl: z.string().trim().url().max(500).nullish(),
   linkLabel: z.string().trim().max(120).nullish(),
   isPublished: z.boolean().default(false),
@@ -50,13 +52,19 @@ const createSchema = z.object({
 export function normalizeMedia(input: {
   imageUrl?: string | null
   imagePublicId?: string | null
+  imageWidth?: number | null
+  imageHeight?: number | null
   linkUrl?: string | null
   linkLabel?: string | null
 }) {
   const { cloudName } = input.imageUrl ? getCloudinaryConfig() : { cloudName: '' }
+  const hasImage = Boolean(input.imageUrl)
   return {
     imageUrl: input.imageUrl ? assertOwnCloudinaryUrl(input.imageUrl, cloudName) : null,
     imagePublicId: input.imagePublicId || null,
+    // ขนาดผูกกับรูป ไม่มีรูปก็ต้องไม่มีขนาดค้างไว้
+    imageWidth: hasImage ? (input.imageWidth ?? null) : null,
+    imageHeight: hasImage ? (input.imageHeight ?? null) : null,
     linkUrl: input.linkUrl ? assertSafeExternalUrl(input.linkUrl) : null,
     linkLabel: input.linkLabel?.trim() || null,
   }

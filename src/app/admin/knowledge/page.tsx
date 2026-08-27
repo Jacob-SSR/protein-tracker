@@ -27,6 +27,8 @@ export default async function AdminKnowledgePage() {
           content: row.content,
           imageUrl: row.imageUrl,
           imagePublicId: row.imagePublicId,
+          imageWidth: row.imageWidth,
+          imageHeight: row.imageHeight,
           linkUrl: row.linkUrl,
           linkLabel: row.linkLabel,
           version: row.version,

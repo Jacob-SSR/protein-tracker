@@ -8,6 +8,8 @@ import { request } from '@/lib/client/api'
 export type ArticleMedia = {
   imageUrl: string | null
   imagePublicId: string | null
+  imageWidth: number | null
+  imageHeight: number | null
   linkUrl: string
   linkLabel: string
 }
@@ -41,6 +43,20 @@ export function KnowledgeImageField({
   const [error, setError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
 
+  /**
+   * ไฟล์ที่เพิ่งอัปโหลดแล้วถูกเปลี่ยน/เอาออกก่อนกดบันทึก จะไม่มีบทความไหนอ้างถึง
+   * เก็บกวาดทิ้งเลย ไม่งั้นไฟล์ขยะสะสมบน Cloudinary
+   * ฝั่ง server เช็คอีกชั้นว่ารูปนั้นไม่ถูกใช้งานอยู่จริง ถึงจะยอมลบ
+   */
+  async function discardUnusedUpload(publicId: string | null) {
+    if (!publicId) return
+    try {
+      await request('/api/uploads/image', { method: 'DELETE', json: { publicId } })
+    } catch {
+      // ลบไฟล์ขยะไม่สำเร็จไม่ใช่เรื่องที่ต้องไปกวนคนเขียนบทความ
+    }
+  }
+
   async function upload(file: File) {
     setError(null)
     setUploading(true)
@@ -70,7 +86,17 @@ export function KnowledgeImageField({
         throw new Error(payload?.error?.message ?? 'อัปโหลดรูปไม่สำเร็จ')
       }
 
-      onChange({ ...media, imageUrl: payload.secure_url, imagePublicId: payload.public_id })
+      // เปลี่ยนรูป: เก็บกวาดรูปเดิมที่ยังไม่ได้บันทึกลงบทความ
+      void discardUnusedUpload(media.imagePublicId)
+
+      onChange({
+        ...media,
+        imageUrl: payload.secure_url,
+        imagePublicId: payload.public_id,
+        // เก็บขนาดจริงไว้ด้วย ฝั่งแสดงผลจะได้ไม่ต้องเดาสัดส่วนแล้วครอปรูป
+        imageWidth: payload.width ?? null,
+        imageHeight: payload.height ?? null,
+      })
     } catch (cause) {
       setError((cause as Error).message)
     } finally {
@@ -120,7 +146,16 @@ export function KnowledgeImageField({
                 type="button"
                 variant="danger"
                 disabled={uploading}
-                onClick={() => onChange({ ...media, imageUrl: null, imagePublicId: null })}
+                onClick={() => {
+                  void discardUnusedUpload(media.imagePublicId)
+                  onChange({
+                    ...media,
+                    imageUrl: null,
+                    imagePublicId: null,
+                    imageWidth: null,
+                    imageHeight: null,
+                  })
+                }}
               >
                 เอารูปออก
               </Button>
