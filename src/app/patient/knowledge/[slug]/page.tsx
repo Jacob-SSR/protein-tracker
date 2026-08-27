@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/db/prisma'
 import { requirePatientPage } from '@/lib/auth/guards'
 import { ArticleImage } from '@/components/knowledge/article-image'
+import { RichText } from '@/components/knowledge/rich-text'
 import { linkLabelOf } from '@/lib/knowledge/display'
 
 /** บทความเต็ม — รูปแสดงเต็มไม่ครอป กดดูเต็มจอได้ และมีปุ่มไปเว็บไซต์ต้นทาง */
@@ -48,7 +49,7 @@ export default async function PatientArticlePage({
         />
       ) : null}
 
-      <div className="whitespace-pre-wrap text-base leading-relaxed">{article.content}</div>
+      <RichText content={article.content} />
 
       {article.linkUrl ? (
         <a
