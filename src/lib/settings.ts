@@ -13,6 +13,14 @@ export const SETTING_KEYS = {
   NOTIFY_THRESHOLDS: 'notify_thresholds',
   /** เปิดให้ผู้ป่วยล็อกอินเข้าดูข้อมูลตัวเองได้หรือไม่ — ปิดไว้ = ระบบสำหรับเจ้าหน้าที่ล้วน */
   PATIENT_PORTAL_ENABLED: 'patient_portal_enabled',
+  /** ปริมาณน้ำต่อ 1 แก้ว (มล.) — ห้าม hardcode 250 ที่อื่น อ่านจากตรงนี้เสมอ */
+  WATER_GLASS_SIZE_ML: 'water_glass_size_ml',
+  /** น้ำที่ควรดื่มต่อน้ำหนักตัว 1 กก. (มล./กก./วัน) */
+  WATER_ML_PER_KG: 'water_ml_per_kg',
+  /** เพดานน้ำต่อวันสำหรับผู้ป่วยที่ต้องจำกัดน้ำ (บวม / ระยะ 4-5 / ฟอกไต) */
+  WATER_RESTRICTED_MAX_ML: 'water_restricted_max_ml',
+  /** เริ่มเตือน "ยังดื่มไม่ครบ" ตั้งแต่กี่โมง (0-23) */
+  WATER_REMINDER_HOUR: 'water_reminder_hour',
 } as const
 
 export const SETTING_DEFAULTS: Record<
@@ -33,6 +41,27 @@ export const SETTING_DEFAULTS: Record<
     value: 'false',
     valueType: 'BOOLEAN',
     description: 'เปิดให้ผู้ป่วยล็อกอินเข้าดูข้อมูลและบันทึกอาหารเองได้',
+  },
+  [SETTING_KEYS.WATER_GLASS_SIZE_ML]: {
+    value: '250',
+    valueType: 'INT',
+    description: 'ปริมาณน้ำต่อ 1 แก้ว (มล.)',
+  },
+  [SETTING_KEYS.WATER_ML_PER_KG]: {
+    value: '30',
+    valueType: 'INT',
+    description: 'น้ำที่ควรดื่มต่อน้ำหนักตัว 1 กก. ต่อวัน (มล.) — ใช้กับผู้ป่วยที่ไม่ต้องจำกัดน้ำ',
+  },
+  [SETTING_KEYS.WATER_RESTRICTED_MAX_ML]: {
+    value: '1000',
+    valueType: 'INT',
+    description:
+      'เพดานน้ำต่อวันเมื่อผู้ป่วยต้องจำกัดน้ำ (มล.) — ใช้เมื่อมีภาวะบวม ระยะ 4-5 หรือฟอกไต',
+  },
+  [SETTING_KEYS.WATER_REMINDER_HOUR]: {
+    value: '20',
+    valueType: 'INT',
+    description: 'เริ่มเตือนว่ายังดื่มน้ำไม่ครบตั้งแต่กี่โมง (0-23) — ค่าเริ่มต้น 20 น.',
   },
   [SETTING_KEYS.NOTIFY_THRESHOLDS]: {
     value: JSON.stringify([
@@ -93,6 +122,21 @@ export async function isPatientPortalEnabled(): Promise<boolean> {
   return (row?.value ?? SETTING_DEFAULTS[SETTING_KEYS.PATIENT_PORTAL_ENABLED].value) === 'true'
 }
 
+export async function getWaterSettings(): Promise<{
+  glassSizeMl: number
+  mlPerKg: number
+  restrictedMaxMl: number
+  reminderHour: number
+}> {
+  const [glassSizeMl, mlPerKg, restrictedMaxMl, reminderHour] = await Promise.all([
+    getIntSetting(SETTING_KEYS.WATER_GLASS_SIZE_ML),
+    getIntSetting(SETTING_KEYS.WATER_ML_PER_KG),
+    getIntSetting(SETTING_KEYS.WATER_RESTRICTED_MAX_ML),
+    getIntSetting(SETTING_KEYS.WATER_REMINDER_HOUR),
+  ])
+  return { glassSizeMl, mlPerKg, restrictedMaxMl, reminderHour }
+}
+
 export async function getNotifyThresholds(): Promise<NotifyThreshold[]> {
   try {
     const parsed = JSON.parse(await readRaw(SETTING_KEYS.NOTIFY_THRESHOLDS))
@@ -122,6 +166,30 @@ export function validateKnownSetting(key: string, value: string) {
 
   if (key === SETTING_KEYS.PATIENT_PORTAL_ENABLED) {
     if (value !== 'true' && value !== 'false') throw new Error('ต้องเป็น true หรือ false')
+    return
+  }
+
+  if (key === SETTING_KEYS.WATER_GLASS_SIZE_ML) {
+    const ml = Number.parseInt(value, 10)
+    if (!Number.isInteger(ml) || ml < 50 || ml > 2000) throw new Error('ต้องเป็น 50-2000 มล.')
+    return
+  }
+
+  if (key === SETTING_KEYS.WATER_ML_PER_KG) {
+    const ml = Number.parseInt(value, 10)
+    if (!Number.isInteger(ml) || ml < 10 || ml > 60) throw new Error('ต้องเป็น 10-60 มล./กก./วัน')
+    return
+  }
+
+  if (key === SETTING_KEYS.WATER_RESTRICTED_MAX_ML) {
+    const ml = Number.parseInt(value, 10)
+    if (!Number.isInteger(ml) || ml < 300 || ml > 5000) throw new Error('ต้องเป็น 300-5000 มล.')
+    return
+  }
+
+  if (key === SETTING_KEYS.WATER_REMINDER_HOUR) {
+    const hour = Number.parseInt(value, 10)
+    if (!Number.isInteger(hour) || hour < 0 || hour > 23) throw new Error('ต้องเป็นชั่วโมง 0-23')
     return
   }
 

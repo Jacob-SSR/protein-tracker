@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
 import { writeAudit } from '@/lib/audit'
-import { formatDateOnly, tomorrow } from '@/lib/date'
+import { formatDateOnly, today } from '@/lib/date'
 import { num, round2, toDecimal } from '@/lib/decimal'
 import { badRequest, conflict } from '@/lib/errors'
 import { previewProteinTarget } from './calculator'
@@ -34,11 +34,13 @@ export type ConfirmInput = {
 
 /**
  * Confirm เป้าหมายโปรตีนใหม่
- * - มีผล "วันถัดไป" เสมอ (ไม่มีวันไหนมีสอง target ซ้อนกัน)
+ * - มีผล "วันนี้" ทันที ผู้ป่วยกรอกข้อมูลเสร็จแล้วใช้ได้เลย ไม่ต้องรอข้ามวัน
+ * - ยังไม่มีวันไหนที่มีสอง target ซ้อนกัน เพราะปิดแถวเดิมด้วย effectiveTo = วันนี้
+ *   และ getCalculationForDate นับ effectiveTo แบบไม่รวมวันนั้น (gt: date)
  * - ปิดแถวเดิม + สร้างแถวใหม่ ในทรานแซคชันเดียว ไม่ overwrite ค่าเดิม
  */
 export async function confirmProteinTarget(input: ConfirmInput) {
-  const effectiveFrom = tomorrow()
+  const effectiveFrom = today()
   const preview = await previewProteinTarget(input.patientId, effectiveFrom, {
     weightBasis: input.weightBasis,
     energyFactorKcal: input.energyFactorKcal,
@@ -108,12 +110,14 @@ export async function confirmProteinTarget(input: ConfirmInput) {
           preview.energyTargetKcal === null ? null : toDecimal(preview.energyTargetKcal),
         ckdStageCode: preview.ckd?.code ?? null,
         egfr: preview.ckd?.egfr == null ? null : toDecimal(preview.ckd.egfr),
+        waterTargetMl: preview.water?.targetMl ?? null,
         inputSnapshot: {
           facts: preview.facts,
           selectedRule: selected,
           weightBasisSource: preview.weightBasisSource,
           suggestedWeightBasis: preview.suggestedWeightBasis,
           ckd: preview.ckd,
+          water: preview.water,
         } as unknown as Prisma.InputJsonValue,
         note: input.note ?? null,
         effectiveFrom,
@@ -153,6 +157,7 @@ export async function confirmProteinTarget(input: ConfirmInput) {
       referenceWeightKg,
       weightBasis,
       energyTargetKcal: preview.energyTargetKcal,
+      waterTargetMl: preview.water?.targetMl ?? null,
       ckdStageCode: preview.ckd?.code ?? null,
       effectiveFrom: formatDateOnly(effectiveFrom),
       previousId: active?.id ?? null,

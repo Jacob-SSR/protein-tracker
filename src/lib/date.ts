@@ -37,6 +37,16 @@ export function today(timeZone: string = APP_TIMEZONE): Date {
   return parseDateOnly(parts)
 }
 
+/** ชั่วโมงปัจจุบัน (0-23) ตามเวลาโรงพยาบาล ไม่ใช่ UTC ของ server */
+export function currentHour(timeZone: string = APP_TIMEZONE): number {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    hour: '2-digit',
+    hour12: false,
+  }).format(new Date())
+  return Number.parseInt(parts, 10)
+}
+
 export function tomorrow(timeZone: string = APP_TIMEZONE): Date {
   return addDays(today(timeZone), 1)
 }

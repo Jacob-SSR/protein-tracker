@@ -35,6 +35,14 @@ type Preview = {
   proteinTargetGrams: number | null
   energyFactorKcal: number | null
   energyTargetKcal: number | null
+  water: {
+    targetMl: number
+    targetLiters: number
+    glassesPerDay: number
+    glassSizeMl: number
+    restricted: boolean
+    restrictionReason: string | null
+  } | null
   effectiveFrom: string
   selected: { ruleName: string } | null
   current: {
@@ -139,7 +147,7 @@ export function ProteinTargetPanel({ patientId }: { patientId: string }) {
           energyFactorKcal: energyFactor,
         },
       })
-      setNotice(`ยืนยันแล้ว เป้าหมายใหม่มีผลตั้งแต่ ${preview.effectiveFrom}`)
+      setNotice(`ยืนยันแล้ว เป้าหมายใหม่มีผลตั้งแต่วันนี้ (${preview.effectiveFrom})`)
       setPreview(null)
       router.refresh()
     } catch (cause) {
@@ -160,7 +168,7 @@ export function ProteinTargetPanel({ patientId }: { patientId: string }) {
   return (
     <Card
       title="เป้าหมายโปรตีนและพลังงาน"
-      description="Preview ไม่บันทึกลงฐานข้อมูล — เป้าหมายใหม่มีผล 00:00 ของวันถัดไป"
+      description="Preview ไม่บันทึกลงฐานข้อมูล — กดยืนยันแล้วเป้าหมายใหม่มีผลกับวันนี้ทันที"
       actions={
         <Button variant="secondary" onClick={() => runPreview()} disabled={pending}>
           {pending && !preview ? 'กำลังคำนวณ...' : 'Preview'}
@@ -281,15 +289,34 @@ export function ProteinTargetPanel({ patientId }: { patientId: string }) {
                   {preview.energyTargetKcal === null ? '—' : `${preview.energyTargetKcal} kcal`}
                 </p>
               </div>
+              <div>
+                <p className="text-xs text-muted">น้ำดื่ม</p>
+                <p className="tabular text-2xl font-semibold text-info">
+                  {preview.water ? `${preview.water.targetMl.toLocaleString('th-TH')} มล.` : '—'}
+                </p>
+                {preview.water ? (
+                  <p className="text-xs text-muted">
+                    {preview.water.targetLiters} ลิตร · {preview.water.glassesPerDay} แก้ว
+                    {preview.water.restricted ? ' (จำกัดน้ำ)' : ''}
+                  </p>
+                ) : null}
+              </div>
               <div className="ml-auto text-right text-sm text-muted">
                 <p>{preview.selected?.ruleName ?? 'ไม่มีกฎที่ตรงกับข้อมูลผู้ป่วย'}</p>
                 <p className="tabular">
                   {preview.proteinFactor ?? '—'} g/kg × {preview.referenceWeightKg ?? '—'} กก.
                 </p>
                 {preview.weightBasisLabel ? <p>ฐาน: {preview.weightBasisLabel}</p> : null}
-                <p>มีผล {preview.effectiveFrom}</p>
+                <p>มีผลวันนี้ ({preview.effectiveFrom})</p>
               </div>
             </div>
+
+            {preview.water?.restricted ? (
+              <Alert tone="warn">
+                จำกัดน้ำเนื่องจาก{preview.water.restrictionReason} — ใช้เพดานที่ตั้งไว้ในหน้าตั้งค่า
+                แทนการคูณตามน้ำหนัก
+              </Alert>
+            ) : null}
 
             {preview.blockedReason ? <Alert tone="warn">{preview.blockedReason}</Alert> : null}
 

@@ -5,6 +5,9 @@ import { num, optionalNum } from '@/lib/decimal'
 import { Card, EmptyState, PageHeader, Table } from '@/components/ui'
 import { HealthDataForms } from '@/components/health-data-forms'
 import { ProteinTargetPanel } from '@/components/protein-target-panel'
+import { WaterCard } from '@/components/water/water-card'
+import { getWaterSummary } from '@/lib/water/service'
+import { today } from '@/lib/date'
 
 /** อายุ ณ วันนี้ — ใช้คำนวณ eGFR ฝั่ง client ระหว่างผู้ป่วยพิมพ์ */
 function ageInYears(birthDate: Date | null): number | null {
@@ -22,7 +25,7 @@ function ageInYears(birthDate: Date | null): number | null {
 export default async function PatientHealthPage() {
   const session = await requirePatientPage()
 
-  const [patient, comorbidities] = await Promise.all([
+  const [patient, comorbidities, water] = await Promise.all([
     prisma.patient.findUniqueOrThrow({
       where: { id: session.patientId },
       include: {
@@ -31,9 +34,12 @@ export default async function PatientHealthPage() {
       },
     }),
     prisma.comorbidity.findMany({ where: { isActive: true }, orderBy: { code: 'asc' } }),
+    getWaterSummary(session.patientId, today()),
   ])
 
   const latestHeight = patient.measurements.find((row) => row.heightCm !== null)
+  const latestMeasurement = patient.measurements[0]
+  const latestDry = patient.measurements.find((row) => row.dryWeightKg !== null)
 
   return (
     <div className="flex flex-col gap-6">
@@ -44,12 +50,17 @@ export default async function PatientHealthPage() {
 
       <ProteinTargetPanel patientId={patient.id} />
 
+      <WaterCard initial={water} />
+
       <HealthDataForms
         patientId={patient.id}
         patient={{
           gender: patient.gender,
           ageYears: ageInYears(patient.birthDate),
           heightCm: latestHeight ? num(latestHeight.heightCm) : null,
+          weightKg: latestMeasurement ? num(latestMeasurement.weightKg) : null,
+          dryWeightKg: latestDry ? num(latestDry.dryWeightKg) : null,
+          lastMeasuredOn: latestMeasurement ? formatDateOnly(latestMeasurement.measuredOn) : null,
         }}
         comorbidities={comorbidities}
         selectedCodes={patient.comorbidities.map((row) => row.comorbidity.code)}

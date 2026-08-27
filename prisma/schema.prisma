@@ -123,6 +123,7 @@ model User {
   updatedSettings       SystemSetting[]
   authoredKnowledge     Knowledge[]
   createdPatientInvites PatientInvite[]
+  waterEntries          WaterIntakeEntry[]
 
   @@index([role])
 }
@@ -149,6 +150,26 @@ model Patient {
   calculations  ProteinCalculation[]
   meals         Meal[]
   invites       PatientInvite[]
+  waterEntries  WaterIntakeEntry[]
+}
+
+/// น้ำดื่มบันทึกทีละแก้ว — หนึ่งแถวคือหนึ่งครั้งที่กดปุ่ม
+/// เก็บรายครั้งแทนยอดรวมรายวัน เพื่อให้ "ถอยกลับ 1 แก้ว" ทำได้จริงและมีประวัติย้อนหลัง
+model WaterIntakeEntry {
+  id          String   @id @default(cuid())
+  patientId   String
+  intakeDate  DateTime @db.Date
+  /// ปริมาณต่อครั้ง (มล.) — snapshot ของ glass size ณ ตอนกด ปรับ setting ทีหลังไม่กระทบของเก่า
+  amountMl    Int
+  /// กันกดรัวหรือ request ซ้ำ — client ส่ง token หนึ่งค่าต่อการกดหนึ่งครั้ง
+  clientToken String?  @unique
+  createdById String
+  createdAt   DateTime @default(now())
+
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  createdBy User    @relation(fields: [createdById], references: [id])
+
+  @@index([patientId, intakeDate])
 }
 
 /// รหัสเชิญให้ผู้ป่วยไปตั้งบัญชีเอง — เจ้าหน้าที่กดสร้าง ผู้ป่วยเอารหัสไปกรอกที่หน้า /register
@@ -181,7 +202,8 @@ model PatientMeasurement {
   dryWeightKg   Decimal? @db.Decimal(6, 2)
   /// true = บวม, false = ไม่บวม, null = ไม่ได้ประเมินครั้งนี้
   hasEdema      Boolean?
-  /// ปริมาณน้ำที่ดื่มของวันนั้น (มล.)
+  /// เลิกใช้แล้ว — น้ำดื่มย้ายไปอยู่ที่ WaterIntakeEntry (บันทึกทีละแก้ว)
+  /// คงคอลัมน์ไว้เพื่อไม่ให้ข้อมูลเก่าหาย ไม่มีการเขียนใหม่ลงคอลัมน์นี้อีก
   waterIntakeMl Int?
   note          String?
   recordedById  String
@@ -289,6 +311,8 @@ model ProteinCalculation {
   energyFactorKcal   Int?
   /// energyFactorKcal x referenceWeightKg ณ ตอนยืนยัน
   energyTargetKcal   Decimal?    @db.Decimal(8, 2)
+  /// เป้าหมายน้ำดื่มต่อวัน (มล.) ณ ตอนยืนยัน — dashboard อ่านค่านี้ ไม่คำนวณสดทุกครั้ง
+  waterTargetMl      Int?
   /// ระยะโรคไตที่คำนวณได้ ณ ตอนยืนยัน (G1-G5) เก็บไว้อธิบายผลย้อนหลัง
   ckdStageCode       String?
   egfr               Decimal?    @db.Decimal(6, 2)

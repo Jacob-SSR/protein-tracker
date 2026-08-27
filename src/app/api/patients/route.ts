@@ -48,6 +48,17 @@ const createSchema = z.object({
   note: z.string().trim().max(500).optional(),
   weightKg: z.number().positive().max(500).optional(),
   heightCm: z.number().positive().max(300).optional(),
+  /** ผลเลือดตั้งต้น บันทึกเป็นผลตรวจของวันนี้ไปพร้อมกับการสร้างผู้ป่วย */
+  labs: z
+    .array(
+      z.object({
+        labType: z.string().trim().min(1).max(50),
+        value: z.number(),
+        unit: z.string().trim().max(20).optional(),
+      }),
+    )
+    .max(20)
+    .optional(),
 })
 
 /** สร้างผู้ป่วยโดยไม่ต้องมีบัญชีเข้าระบบ — เจ้าหน้าที่เป็นคนบันทึกข้อมูลให้ */

@@ -13,6 +13,8 @@ import { getCalculationForDate } from '@/lib/protein/calculator'
 import { WEIGHT_BASIS_LABELS } from '@/lib/protein/rules'
 import { PatientAccountPanel } from '@/components/patient-account-panel'
 import { PatientDangerZone } from '@/components/patient-danger-zone'
+import { WaterCard } from '@/components/water/water-card'
+import { getWaterSummary } from '@/lib/water/service'
 import { getDailySummary } from '@/lib/meals/summary'
 import { isPatientPortalEnabled } from '@/lib/settings'
 import { getActiveInvite } from '@/lib/patients/invites'
@@ -51,6 +53,8 @@ export default async function AdminPatientPage({ params }: { params: Promise<{ i
   if (!patient) notFound()
 
   const latestHeight = patient.measurements.find((row) => row.heightCm !== null)
+  const latestMeasurement = patient.measurements[0]
+  const latestDry = patient.measurements.find((row) => row.dryWeightKg !== null)
   const patientAgeYears = (() => {
     if (!patient.birthDate) return null
     const now = new Date()
@@ -65,7 +69,7 @@ export default async function AdminPatientPage({ params }: { params: Promise<{ i
 
   const date = today()
   const activeInvite = patient.userId ? null : await getActiveInvite(patient.id)
-  const [summary, weekly, frequentFoods, calculation, counts] = await Promise.all([
+  const [summary, weekly, frequentFoods, calculation, counts, water] = await Promise.all([
     getDailySummary(patient.id, date),
     getWeeklySummary(patient.id, date),
     getFrequentFoods(patient.id),
@@ -76,6 +80,7 @@ export default async function AdminPatientPage({ params }: { params: Promise<{ i
       prisma.proteinCalculation.count({ where: { patientId: patient.id } }),
       prisma.mealItem.count({ where: { meal: { patientId: patient.id } } }),
     ]),
+    getWaterSummary(patient.id, date),
   ])
 
   return (
@@ -88,6 +93,12 @@ export default async function AdminPatientPage({ params }: { params: Promise<{ i
       />
 
       <ProteinTargetPanel patientId={patient.id} />
+
+      <WaterCard
+        initial={water}
+        patientId={patient.id}
+        assessmentHref={`/admin/patients/${patient.id}`}
+      />
 
       <ProteinWorkspace
         patientId={patient.id}
@@ -106,6 +117,9 @@ export default async function AdminPatientPage({ params }: { params: Promise<{ i
           gender: patient.gender,
           ageYears: patientAgeYears,
           heightCm: latestHeight ? num(latestHeight.heightCm) : null,
+          weightKg: latestMeasurement ? num(latestMeasurement.weightKg) : null,
+          dryWeightKg: latestDry ? num(latestDry.dryWeightKg) : null,
+          lastMeasuredOn: latestMeasurement ? formatDateOnly(latestMeasurement.measuredOn) : null,
         }}
         comorbidities={comorbidities}
         selectedCodes={patient.comorbidities.map((row) => row.comorbidity.code)}

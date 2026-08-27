@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { handle, ok, requireSession } from '@/lib/api'
-import { tomorrow } from '@/lib/date'
+import { today } from '@/lib/date'
 import { requirePatientAccess } from '@/lib/patients/access'
 import { previewProteinTarget } from '@/lib/protein/calculator'
 import { ENERGY_FACTORS_KCAL } from '@/lib/protein/body-metrics'
@@ -29,7 +29,7 @@ export async function POST(request: Request, { params }: Params) {
     await requirePatientAccess(session, id)
 
     const body = bodySchema.parse(await request.json().catch(() => ({})))
-    const preview = await previewProteinTarget(id, tomorrow(), {
+    const preview = await previewProteinTarget(id, today(), {
       weightBasis: body.weightBasis,
       energyFactorKcal: body.energyFactorKcal,
     })

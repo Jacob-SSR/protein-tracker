@@ -67,6 +67,33 @@ const SETTINGS: {
 ]
 
 // โรคประจำร่วมตามแบบฟอร์มที่ใช้จริงในคลินิก
+const WATER_SETTINGS = [
+  {
+    key: 'water_glass_size_ml',
+    value: '250',
+    valueType: 'INT' as const,
+    description: 'ปริมาณน้ำต่อ 1 แก้ว (มล.)',
+  },
+  {
+    key: 'water_ml_per_kg',
+    value: '30',
+    valueType: 'INT' as const,
+    description: 'น้ำที่ควรดื่มต่อน้ำหนักตัว 1 กก. ต่อวัน (มล.) — ใช้กับผู้ป่วยที่ไม่ต้องจำกัดน้ำ',
+  },
+  {
+    key: 'water_reminder_hour',
+    value: '20',
+    valueType: 'INT' as const,
+    description: 'เริ่มเตือนว่ายังดื่มน้ำไม่ครบตั้งแต่กี่โมง (0-23) — ค่าเริ่มต้น 20 น.',
+  },
+  {
+    key: 'water_restricted_max_ml',
+    value: '1000',
+    valueType: 'INT' as const,
+    description: 'เพดานน้ำต่อวันเมื่อต้องจำกัดน้ำ (มล.) — ใช้เมื่อมีภาวะบวม ระยะ 4-5 หรือฟอกไต',
+  },
+]
+
 const COMORBIDITIES = [
   { code: 'DM', name: 'โรคเบาหวาน' },
   { code: 'HT', name: 'โรคความดันโลหิตสูง' },
@@ -97,7 +124,7 @@ async function main() {
     update: {},
   })
 
-  for (const setting of SETTINGS) {
+  for (const setting of [...SETTINGS, ...WATER_SETTINGS]) {
     await prisma.systemSetting.upsert({
       where: { key: setting.key },
       create: { ...setting, updatedById: superAdmin.id },

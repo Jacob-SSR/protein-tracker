@@ -19,6 +19,8 @@ import {
   type PatientFacts,
   type RuleEvaluation,
 } from './rules'
+import { getWaterSettings } from '@/lib/settings'
+import { computeWaterTarget, type WaterTarget } from '@/lib/water/target'
 import type { WeightBasis } from '@prisma/client'
 
 export type ProteinPreview = {
@@ -42,6 +44,8 @@ export type ProteinPreview = {
   proteinTargetGrams: number | null
   energyFactorKcal: number | null
   energyTargetKcal: number | null
+  /** เป้าหมายน้ำดื่มต่อวัน คิดจากน้ำหนักฐานเดียวกับโปรตีน */
+  water: WaterTarget | null
   /** วันที่เป้าหมายใหม่จะเริ่มมีผล (พรุ่งนี้เสมอ) */
   effectiveFrom: string
   current: {
@@ -92,6 +96,12 @@ export async function buildPatientFacts(patientId: string, asOf: Date): Promise<
   })
 
   if (!patient) throw notFound('ไม่พบผู้ป่วยรายนี้')
+
+  // น้ำดื่มย้ายไปอยู่ที่ WaterIntakeEntry แล้ว (บันทึกทีละแก้ว) ไม่อ่านคอลัมน์เก่าอีก
+  const waterToday = await prisma.waterIntakeEntry.aggregate({
+    where: { patientId, intakeDate: asOf },
+    _sum: { amountMl: true },
+  })
 
   const measurement = patient.measurements[0]
   if (!measurement) {
@@ -146,7 +156,7 @@ export async function buildPatientFacts(patientId: string, asOf: Date): Promise<
     adjustedWeightKg: adjustedBodyWeightKg(weightKg, ibwKg, bmi),
     dryWeightKg: dryRow ? num(dryRow.dryWeightKg) : null,
     hasEdema: edemaRow?.hasEdema ?? null,
-    waterIntakeMl: measurement.waterIntakeMl ?? null,
+    waterIntakeMl: waterToday._sum.amountMl ?? null,
     egfr,
     egfrSource: egfr === null ? null : labEgfr !== null ? 'LAB' : 'ESTIMATED',
     ckdStage: stage?.stage ?? null,
@@ -202,6 +212,15 @@ export async function previewProteinTarget(
       : round2(proteinFactor * reference.weightKg)
 
   const stage = ckdStageFromEgfr(facts.egfr)
+  const water = computeWaterTarget(
+    {
+      referenceWeightKg: reference.weightKg,
+      ckdStage: facts.ckdStage,
+      hasEdema: facts.hasEdema,
+      isDialysis: facts.isDialysis,
+    },
+    await getWaterSettings(),
+  )
 
   return {
     patientId,
@@ -219,6 +238,7 @@ export async function previewProteinTarget(
     proteinTargetGrams,
     energyFactorKcal: options.energyFactorKcal ?? null,
     energyTargetKcal: energyTargetKcal(options.energyFactorKcal, reference.weightKg),
+    water,
     effectiveFrom: formatDateOnly(effectiveFrom),
     current: current
       ? {

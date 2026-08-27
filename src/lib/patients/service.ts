@@ -16,6 +16,8 @@ export type CreatePatientInput = {
   /** บันทึกน้ำหนักตั้งต้นไปพร้อมกันได้เลย จะได้คำนวณเป้าหมายทันที */
   weightKg?: number | null
   heightCm?: number | null
+  /** ผลเลือดตั้งต้น — บันทึกเป็นผลตรวจของวันนี้ */
+  labs?: { labType: string; value: number; unit?: string }[]
 }
 
 /**
@@ -40,13 +42,33 @@ export async function createPatient(
         },
       })
 
+      const measuredOn = today()
+
       if (input.weightKg) {
         await tx.patientMeasurement.create({
           data: {
             patientId: patient.id,
-            measuredOn: today(),
+            measuredOn,
             weightKg: new Prisma.Decimal(input.weightKg),
             heightCm: input.heightCm ? new Prisma.Decimal(input.heightCm) : null,
+            recordedById: session.userId,
+          },
+        })
+      }
+
+      // ผลเลือดใช้ labType ตัวพิมพ์ใหญ่เสมอ ให้ตรงกับที่ฝั่งคำนวณไปอ่าน
+      const labs = (input.labs ?? []).map((lab) => ({
+        ...lab,
+        labType: lab.labType.trim().toUpperCase(),
+      }))
+      for (const lab of labs) {
+        await tx.patientLab.create({
+          data: {
+            patientId: patient.id,
+            labType: lab.labType,
+            value: new Prisma.Decimal(lab.value),
+            unit: lab.unit || null,
+            measuredOn,
             recordedById: session.userId,
           },
         })
@@ -57,7 +79,13 @@ export async function createPatient(
         action: 'PATIENT_CREATE',
         targetType: 'Patient',
         targetId: patient.id,
-        newValue: { hn: patient.hn, fullName: patient.fullName },
+        newValue: {
+          hn: patient.hn,
+          fullName: patient.fullName,
+          weightKg: input.weightKg ?? null,
+          heightCm: input.heightCm ?? null,
+          labs,
+        },
         ...meta,
       })
 

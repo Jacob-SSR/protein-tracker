@@ -1,32 +1,43 @@
 import { requirePatientPage } from '@/lib/auth/guards'
-import { formatDateOnly, today } from '@/lib/date'
-import { num } from '@/lib/decimal'
+import { prisma } from '@/lib/db/prisma'
+import { today } from '@/lib/date'
 import { getDailySummary, getWeeklySummary } from '@/lib/meals/summary'
-import { getFrequentFoods } from '@/lib/foods/frequent'
-import { getCalculationForDate } from '@/lib/protein/calculator'
-import { WEIGHT_BASIS_LABELS } from '@/lib/protein/rules'
-import { ProteinWorkspace } from '@/components/protein/workspace'
+import { getWaterSummary } from '@/lib/water/service'
+import { DailyOverview } from '@/components/patient/daily-overview'
 
+/**
+ * หน้าหลักของผู้ป่วย = ภาพรวมวันนี้ + สิ่งที่กดบ่อย (น้ำ)
+ * การบันทึกอาหารแบบละเอียดอยู่ที่ /patient/meals คนละหน้ากันโดยตั้งใจ
+ */
 export default async function PatientDashboard() {
   const session = await requirePatientPage()
   const date = today()
 
-  const [summary, weekly, frequentFoods, calculation] = await Promise.all([
+  const [summary, weekly, water, patient] = await Promise.all([
     getDailySummary(session.patientId, date),
     getWeeklySummary(session.patientId, date),
-    getFrequentFoods(session.patientId),
-    getCalculationForDate(session.patientId, date),
+    getWaterSummary(session.patientId, date),
+    prisma.patient.findUniqueOrThrow({
+      where: { id: session.patientId },
+      select: { fullName: true },
+    }),
   ])
 
   return (
-    <ProteinWorkspace
-      initialDate={formatDateOnly(date)}
-      initialSummary={summary}
+    <DailyOverview
+      greetingName={patient.fullName}
+      todayLabel={new Date().toLocaleDateString('th-TH', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      })}
+      summary={summary}
       weekly={weekly}
-      frequentFoods={frequentFoods}
-      referenceWeightKg={calculation ? num(calculation.referenceWeightKg) : null}
-      weightBasisLabel={calculation ? WEIGHT_BASIS_LABELS[calculation.weightBasis] : null}
+      water={water}
+      mealsHref="/patient/meals"
       weeklyHref="/patient/weekly"
+      assessmentHref="/patient/health"
     />
   )
 }

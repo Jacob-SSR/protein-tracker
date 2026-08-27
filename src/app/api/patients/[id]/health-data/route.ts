@@ -18,8 +18,6 @@ const bodySchema = z.object({
   dryWeightKg: z.number().positive().max(500).optional(),
   /** true = บวม, false = ไม่บวม, ไม่ส่ง = ไม่ได้ประเมินครั้งนี้ */
   hasEdema: z.boolean().optional(),
-  /** ปริมาณน้ำที่ดื่มวันนี้ (มล.) */
-  waterIntakeMl: z.number().int().min(0).max(20000).optional(),
   labs: z
     .array(
       z.object({
@@ -52,10 +50,7 @@ export async function POST(request: Request, { params }: Params) {
     const labs = body.labs?.map((lab) => ({ ...lab, labType: lab.labType.toUpperCase() })) ?? []
 
     const hasWeight = body.weightKg !== undefined
-    const hasDailyExtras =
-      body.dryWeightKg !== undefined ||
-      body.hasEdema !== undefined ||
-      body.waterIntakeMl !== undefined
+    const hasDailyExtras = body.dryWeightKg !== undefined || body.hasEdema !== undefined
     const changesComorbidity = body.comorbidityCodes != null
     // น้ำหนักแห้ง/บวม/น้ำ อยู่บนแถว measurement เดียวกัน — ต้องมีน้ำหนักถึงจะสร้างแถวได้
     if (hasDailyExtras && !hasWeight) {
@@ -89,7 +84,6 @@ export async function POST(request: Request, { params }: Params) {
             heightCm: body.heightCm ? toDecimal(body.heightCm) : null,
             dryWeightKg: body.dryWeightKg ? toDecimal(body.dryWeightKg) : null,
             hasEdema: body.hasEdema ?? null,
-            waterIntakeMl: body.waterIntakeMl ?? null,
             recordedById: session.userId,
           },
         })
@@ -136,7 +130,6 @@ export async function POST(request: Request, { params }: Params) {
           heightCm: body.heightCm ?? null,
           dryWeightKg: body.dryWeightKg ?? null,
           hasEdema: body.hasEdema ?? null,
-          waterIntakeMl: body.waterIntakeMl ?? null,
           labs,
           comorbidityCodes: changesComorbidity ? comorbidities.map((c) => c.code) : null,
         },
