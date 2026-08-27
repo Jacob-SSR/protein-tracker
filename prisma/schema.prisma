@@ -467,14 +467,21 @@ model SystemSetting {
 }
 
 model Knowledge {
-  id          String   @id @default(cuid())
-  slug        String
-  title       String
-  content     String
-  version     Int      @default(1)
-  isPublished Boolean  @default(false)
-  authorId    String
-  createdAt   DateTime @default(now())
+  id            String   @id @default(cuid())
+  slug          String
+  title         String
+  content       String
+  /// รูปปกจาก Cloudinary — เก็บ secure_url ที่ตรวจแล้วว่าเป็นของ cloud เราเท่านั้น
+  imageUrl      String?
+  /// public_id ของ Cloudinary ไว้ใช้ลบไฟล์ทีหลัง
+  imagePublicId String?
+  /// ลิงก์เว็บไซต์ต้นทาง — กดที่รูปแล้วไปที่นี่ ไม่ใช่ไปเปิดไฟล์รูปบน Cloudinary
+  linkUrl       String?
+  linkLabel     String?
+  version       Int      @default(1)
+  isPublished   Boolean  @default(false)
+  authorId      String
+  createdAt     DateTime @default(now())
 
   author User @relation(fields: [authorId], references: [id])
 

@@ -4,6 +4,11 @@ import { prisma } from '@/lib/db/prisma'
 import { requestMeta, writeAudit } from '@/lib/audit'
 import { ADMIN_ROLES, isAdmin } from '@/lib/permissions'
 import { conflict } from '@/lib/errors'
+import {
+  assertOwnCloudinaryUrl,
+  assertSafeExternalUrl,
+  getCloudinaryConfig,
+} from '@/lib/uploads/cloudinary'
 import { Prisma } from '@prisma/client'
 
 /** ผู้ป่วยเห็นเฉพาะเวอร์ชันที่เผยแพร่แล้ว, admin เห็นทุกเวอร์ชัน */
@@ -30,8 +35,32 @@ const createSchema = z.object({
     .regex(/^[a-z0-9-]+$/, 'ใช้ได้เฉพาะ a-z 0-9 และ -'),
   title: z.string().trim().min(1).max(200),
   content: z.string().trim().min(1).max(20000),
+  imageUrl: z.string().trim().url().max(500).nullish(),
+  imagePublicId: z.string().trim().max(200).nullish(),
+  linkUrl: z.string().trim().url().max(500).nullish(),
+  linkLabel: z.string().trim().max(120).nullish(),
   isPublished: z.boolean().default(false),
 })
+
+/**
+ * ตรวจรูปกับลิงก์ก่อนเขียนลง DB
+ * รูปต้องเป็นของ cloud เรา ลิงก์ต้องเป็น http/https — กันคนยิง API ตรงๆ
+ * ใส่ URL อะไรก็ได้ลงบทความที่ผู้ป่วยเห็น
+ */
+export function normalizeMedia(input: {
+  imageUrl?: string | null
+  imagePublicId?: string | null
+  linkUrl?: string | null
+  linkLabel?: string | null
+}) {
+  const { cloudName } = input.imageUrl ? getCloudinaryConfig() : { cloudName: '' }
+  return {
+    imageUrl: input.imageUrl ? assertOwnCloudinaryUrl(input.imageUrl, cloudName) : null,
+    imagePublicId: input.imagePublicId || null,
+    linkUrl: input.linkUrl ? assertSafeExternalUrl(input.linkUrl) : null,
+    linkLabel: input.linkLabel?.trim() || null,
+  }
+}
 
 export async function POST(request: Request) {
   return handle(async () => {
@@ -39,9 +68,11 @@ export async function POST(request: Request) {
     const body = createSchema.parse(await request.json())
 
     try {
+      const media = normalizeMedia(body)
+
       const created = await prisma.$transaction(async (tx) => {
         const row = await tx.knowledge.create({
-          data: { ...body, version: 1, authorId: session.userId },
+          data: { ...body, ...media, version: 1, authorId: session.userId },
         })
         await writeAudit(tx, {
           actorId: session.userId,

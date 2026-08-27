@@ -4,12 +4,17 @@ import { prisma } from '@/lib/db/prisma'
 import { requestMeta, writeAudit } from '@/lib/audit'
 import { ADMIN_ROLES } from '@/lib/permissions'
 import { notFound } from '@/lib/errors'
+import { normalizeMedia } from '../route'
 
 type Params = { params: Promise<{ slug: string }> }
 
 const bodySchema = z.object({
   title: z.string().trim().min(1).max(200),
   content: z.string().trim().min(1).max(20000),
+  imageUrl: z.string().trim().url().max(500).nullish(),
+  imagePublicId: z.string().trim().max(200).nullish(),
+  linkUrl: z.string().trim().url().max(500).nullish(),
+  linkLabel: z.string().trim().max(120).nullish(),
   isPublished: z.boolean().default(false),
 })
 
@@ -42,6 +47,7 @@ export async function POST(request: Request, { params }: Params) {
           slug,
           title: body.title,
           content: body.content,
+          ...normalizeMedia(body),
           isPublished: body.isPublished,
           version: latest.version + 1,
           authorId: session.userId,

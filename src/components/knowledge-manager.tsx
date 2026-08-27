@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { Alert, Badge, Button, Card, EmptyState, Field, Input, Textarea } from '@/components/ui'
+import { KnowledgeImageField, type ArticleMedia } from '@/components/knowledge-image-field'
 import { request } from '@/lib/client/api'
 
 type Article = {
@@ -10,13 +11,17 @@ type Article = {
   slug: string
   title: string
   content: string
+  imageUrl: string | null
+  imagePublicId: string | null
+  linkUrl: string | null
+  linkLabel: string | null
   version: number
   isPublished: boolean
   author: string
   createdAt: string
 }
 
-type Draft = {
+type Draft = ArticleMedia & {
   slug: string
   title: string
   content: string
@@ -24,7 +29,29 @@ type Draft = {
   isNew: boolean
 }
 
-export function KnowledgeManager({ articles }: { articles: Article[] }) {
+const emptyMedia: ArticleMedia = {
+  imageUrl: null,
+  imagePublicId: null,
+  linkUrl: '',
+  linkLabel: '',
+}
+
+function mediaOf(article: Article): ArticleMedia {
+  return {
+    imageUrl: article.imageUrl,
+    imagePublicId: article.imagePublicId,
+    linkUrl: article.linkUrl ?? '',
+    linkLabel: article.linkLabel ?? '',
+  }
+}
+
+export function KnowledgeManager({
+  articles,
+  cloudinaryReady,
+}: {
+  articles: Article[]
+  cloudinaryReady: boolean
+}) {
   const router = useRouter()
   const [draft, setDraft] = useState<Draft | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -43,6 +70,13 @@ export function KnowledgeManager({ articles }: { articles: Article[] }) {
     setNotice(null)
     setPending(true)
     try {
+      const media = {
+        imageUrl: draft.imageUrl,
+        imagePublicId: draft.imagePublicId,
+        linkUrl: draft.linkUrl.trim() || null,
+        linkLabel: draft.linkLabel.trim() || null,
+      }
+
       if (draft.isNew) {
         await request('/api/knowledge', {
           method: 'POST',
@@ -50,6 +84,7 @@ export function KnowledgeManager({ articles }: { articles: Article[] }) {
             slug: draft.slug.trim(),
             title: draft.title.trim(),
             content: draft.content,
+            ...media,
             isPublished: draft.isPublished,
           },
         })
@@ -59,6 +94,7 @@ export function KnowledgeManager({ articles }: { articles: Article[] }) {
           json: {
             title: draft.title.trim(),
             content: draft.content,
+            ...media,
             isPublished: draft.isPublished,
           },
         })
@@ -102,6 +138,11 @@ export function KnowledgeManager({ articles }: { articles: Article[] }) {
                 onChange={(event) => setDraft({ ...draft, content: event.target.value })}
               />
             </Field>
+            <KnowledgeImageField
+              media={draft}
+              onChange={(media) => setDraft({ ...draft, ...media })}
+              cloudinaryReady={cloudinaryReady}
+            />
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
@@ -135,6 +176,7 @@ export function KnowledgeManager({ articles }: { articles: Article[] }) {
                   slug: '',
                   title: '',
                   content: '',
+                  ...emptyMedia,
                   isPublished: false,
                   isNew: true,
                 })
@@ -171,6 +213,7 @@ export function KnowledgeManager({ articles }: { articles: Article[] }) {
                           slug,
                           title: latest.title,
                           content: latest.content,
+                          ...mediaOf(latest),
                           isPublished: latest.isPublished,
                           isNew: false,
                         })
