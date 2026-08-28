@@ -15,7 +15,7 @@ export default async function PatientLayout({ children }: { children: React.Reac
   const nav = [
     { href: '/patient/dashboard', label: 'หน้าหลัก', icon: <IconHome /> },
     { href: '/patient/meals', label: 'บันทึกอาหาร', icon: <IconMeal /> },
-    { href: '/patient/health', label: 'บันทึกข้อมูลสุขภาพ', icon: <IconUser /> },
+    { href: '/patient/health', label: 'สุขภาพของฉัน', icon: <IconUser /> },
     { href: '/patient/weekly', label: 'สรุปรายสัปดาห์', icon: <IconChart /> },
     { href: '/patient/foods', label: 'เสนออาหารใหม่', icon: <IconList /> },
     { href: '/patient/knowledge', label: 'ความรู้', icon: <IconBook /> },

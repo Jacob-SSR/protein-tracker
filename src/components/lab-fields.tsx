@@ -43,6 +43,24 @@ export function labCode(row: LabRow) {
   return row.labType === '__CUSTOM__' ? row.customType.trim().toUpperCase() : row.labType
 }
 
+/**
+ * เอาผลเลือดครั้งก่อนมาตั้งเป็นค่าเริ่มต้นของฟอร์ม
+ * รอบตรวจถัดไปเจ้าหน้าที่จะได้แก้เฉพาะค่าที่เปลี่ยน ไม่ต้องพิมพ์ใหม่ทั้งชุด
+ * รายการที่ไม่มีในลิสต์มาตรฐาน (เคยพิมพ์เอง) กลับมาเป็นแบบพิมพ์เองเหมือนเดิม
+ */
+export function labRowsFrom(labs: { labType: string; value: number; unit: string | null }[]) {
+  if (labs.length === 0) return [emptyLab()]
+  return labs.map((lab) => {
+    const known = COMMON_LABS.find((item) => item.code === lab.labType)
+    return {
+      labType: known ? lab.labType : '__CUSTOM__',
+      customType: known ? '' : lab.labType,
+      value: String(lab.value),
+      unit: lab.unit ?? known?.unit ?? '',
+    }
+  })
+}
+
 /** เฉพาะแถวที่กรอกค่าแล้วและรู้ว่าเป็นรายการอะไร */
 export function filledLabs(rows: LabRow[]) {
   return rows.filter((lab) => lab.value.trim() !== '' && labCode(lab) !== '')

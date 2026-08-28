@@ -5,6 +5,7 @@ import { Alert, Badge, Button, Field, Input, Modal, Select } from '@/components/
 import { IconMeal, IconSearch } from '@/components/icons'
 import { ProgressGauge } from '@/components/protein/gauge'
 import { WeeklyChart } from '@/components/protein/weekly-chart'
+import { toSpoonDisplay, type SpoonDisplay } from '@/lib/protein/spoons'
 import { request } from '@/lib/client/api'
 
 type Summary = {
@@ -14,10 +15,16 @@ type Summary = {
   remainingGrams: number | null
   percent: number | null
   notification: { level: 'INFO' | 'WARN' | 'DANGER'; message: string } | null
+  energy: {
+    targetKcal: number | null
+    consumedKcal: number
+    itemsWithoutEnergy: number
+  }
   meals: {
     id: string
     mealType: string
     subtotalGrams: number
+    subtotalKcal: number
     items: {
       id: string
       foodName: string
@@ -181,29 +188,37 @@ export function ProteinWorkspace({
           <StatCard
             tone="brand"
             label="เป้าหมายโปรตีนต่อวัน"
-            value={summary.targetGrams}
-            unit="กรัม/วัน"
+            value={toSpoonDisplay(summary.targetGrams)}
+            unit="ช้อน/วัน"
             note={
-              referenceWeightKg
-                ? `คำนวณจาก${weightBasisLabel ?? 'น้ำหนัก'} ${referenceWeightKg} กก.`
-                : 'ยังไม่ได้กำหนดเป้าหมาย'
+              summary.targetGrams === null
+                ? 'ยังไม่ได้กำหนดเป้าหมาย'
+                : `${summary.targetGrams} กรัม · คำนวณจาก${weightBasisLabel ?? 'น้ำหนัก'} ${referenceWeightKg ?? '—'} กก.`
             }
           />
           <StatCard
             tone="info"
             label="โปรตีนที่รับประทานไป"
-            value={summary.consumedGrams}
-            unit="กรัม"
+            value={toSpoonDisplay(summary.consumedGrams)}
+            unit="ช้อน"
             note={
-              summary.percent !== null ? `คิดเป็น ${Math.round(summary.percent)}% ของเป้าหมาย` : '—'
+              summary.percent !== null
+                ? `${summary.consumedGrams} กรัม · ${Math.round(summary.percent)}% ของเป้าหมาย`
+                : `${summary.consumedGrams} กรัม`
             }
           />
           <StatCard
             tone={over ? 'danger' : 'accent'}
             label={over ? 'โปรตีนที่เกิน' : 'โปรตีนที่เหลือ'}
-            value={summary.remainingGrams === null ? null : Math.abs(summary.remainingGrams)}
-            unit="กรัม"
-            note={over ? 'เกินเป้าหมายของวันนี้แล้ว' : 'สามารถรับได้อีก'}
+            value={toSpoonDisplay(
+              summary.remainingGrams === null ? null : Math.abs(summary.remainingGrams),
+            )}
+            unit="ช้อน"
+            note={
+              summary.remainingGrams === null
+                ? '—'
+                : `${Math.abs(summary.remainingGrams)} กรัม · ${over ? 'เกินเป้าหมายแล้ว' : 'รับได้อีก'}`
+            }
           />
         </div>
 
@@ -321,8 +336,8 @@ export function ProteinWorkspace({
                         <span className="w-32 text-muted">
                           {item.quantity} × {item.unitName}
                         </span>
-                        <span className="w-14 text-right tabular font-medium">
-                          {item.proteinAmount} g
+                        <span className="w-20 text-right tabular font-medium">
+                          {toSpoonDisplay(item.proteinAmount).text} ช้อน
                         </span>
                         <span className="flex gap-0.5">
                           <Button
@@ -348,17 +363,42 @@ export function ProteinWorkspace({
                   </ul>
                   <div className="flex justify-between bg-brand-tint px-3 py-2 text-sm">
                     <span className="text-muted">รวม{mealLabel(meal.mealType)}</span>
-                    <span className="tabular font-medium text-brand">{meal.subtotalGrams} g</span>
+                    <span className="tabular font-medium text-brand">
+                      {meal.subtotalGrams} g
+                      {meal.subtotalKcal > 0 ? (
+                        <span className="ml-2 font-normal text-muted">
+                          {meal.subtotalKcal.toLocaleString('th-TH')} kcal
+                        </span>
+                      ) : null}
+                    </span>
                   </div>
                 </div>
               ))
             )}
 
-            <div className="flex items-center justify-between rounded-xl bg-brand-soft px-4 py-3">
-              <span className="font-medium">รวมทั้งวัน</span>
-              <span className="tabular text-lg font-semibold text-brand">
-                {summary.consumedGrams} g
-              </span>
+            <div className="rounded-xl bg-brand-soft px-4 py-3">
+              <div className="flex items-center justify-between">
+                <span className="font-medium">รวมทั้งวัน</span>
+                <span className="tabular text-lg font-semibold text-brand">
+                  {summary.consumedGrams} g
+                </span>
+              </div>
+              <div className="mt-1 flex items-center justify-between text-sm">
+                <span className="text-muted">พลังงาน</span>
+                <span className="tabular text-muted">
+                  {summary.energy.consumedKcal.toLocaleString('th-TH')}
+                  {summary.energy.targetKcal !== null
+                    ? ` / ${summary.energy.targetKcal.toLocaleString('th-TH')}`
+                    : ''}{' '}
+                  kcal
+                </span>
+              </div>
+              {summary.energy.itemsWithoutEnergy > 0 ? (
+                <p className="mt-1 text-xs text-warn">
+                  ยังไม่นับพลังงานของ {summary.energy.itemsWithoutEnergy} รายการ —
+                  อาหารเหล่านั้นยังไม่ได้ใส่ค่า kcal ไว้ในระบบ
+                </p>
+              ) : null}
             </div>
           </div>
         </section>
@@ -530,7 +570,7 @@ function StatCard({
 }: {
   tone: 'brand' | 'info' | 'accent' | 'danger'
   label: string
-  value: number | null
+  value: SpoonDisplay
   unit: string
   note: string
 }) {
@@ -545,16 +585,19 @@ function StatCard({
     <div className={`rounded-xl border border-line p-4 ${styles}`}>
       <p className="text-xs opacity-90">{label}</p>
       <p className="mt-1 flex items-baseline gap-1">
-        {value === null ? (
+        {value.value === null ? (
           <span className="text-lg font-medium text-muted">ยังไม่มีข้อมูล</span>
         ) : (
           <>
-            <span className="tabular text-3xl font-semibold">{value}</span>
+            <span className="text-3xl font-semibold">{value.text}</span>
             <span className="text-xs">{unit}</span>
           </>
         )}
       </p>
-      <p className="mt-1 text-[11px] text-muted">{note}</p>
+      <p className="mt-1 text-[11px] text-muted">
+        {note}
+        {value.rounded ? ' · ปัดเป็นปริมาณที่ตวงได้ง่าย' : ''}
+      </p>
     </div>
   )
 }

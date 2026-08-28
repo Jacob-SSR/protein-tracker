@@ -8,6 +8,7 @@ export type UnitDraft = {
   unitName: string
   gramsPerUnit: string
   proteinAmount: string
+  energyKcal: string
   isDefault: boolean
 }
 
@@ -15,6 +16,7 @@ export const emptyUnit = (): UnitDraft => ({
   unitName: '',
   gramsPerUnit: '',
   proteinAmount: '',
+  energyKcal: '',
   isDefault: false,
 })
 
@@ -24,6 +26,7 @@ export function toUnitPayload(units: UnitDraft[]) {
     unitName: unit.unitName.trim(),
     gramsPerUnit: unit.gramsPerUnit ? Number(unit.gramsPerUnit) : undefined,
     proteinAmount: Number(unit.proteinAmount),
+    energyKcal: unit.energyKcal.trim() ? Number(unit.energyKcal) : undefined,
     isDefault: unit.isDefault,
   }))
 }
@@ -53,7 +56,8 @@ export function FoodUnitFields({
         <p className="text-sm font-medium">หน่วยและปริมาณโปรตีน</p>
         <p className="text-sm text-muted">
           หนึ่งอาหารมีได้หลายหน่วย เช่น 100 กรัม / 1 ชิ้น / 1 จาน —
-          หน่วยหลักคือหน่วยที่ระบบเลือกให้อัตโนมัติตอนบันทึกอาหาร
+          หน่วยหลักคือหน่วยที่ระบบเลือกให้อัตโนมัติตอนบันทึกอาหาร ช่องพลังงานไม่บังคับ แต่ถ้าใส่ไว้
+          ระบบจะรวมพลังงานที่ผู้ป่วยทานในแต่ละวันให้อัตโนมัติ
         </p>
       </div>
 
@@ -85,7 +89,7 @@ export function FoodUnitFields({
             ) : null}
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-[minmax(9rem,1fr)_8rem_8rem]">
+          <div className="grid gap-3 sm:grid-cols-[minmax(9rem,1fr)_7rem_7rem_8rem]">
             <Field label="ชื่อหน่วย" hint="ตามที่ผู้ป่วยจะเห็นตอนเลือก">
               <Input
                 value={unit.unitName}
@@ -114,6 +118,17 @@ export function FoodUnitFields({
                 onChange={(event) => update(index, { proteinAmount: event.target.value })}
                 className="w-full tabular"
                 required
+              />
+            </Field>
+            <Field label="พลังงาน (kcal)" hint="ต่อ 1 หน่วยนี้ · ไม่บังคับ">
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={unit.energyKcal}
+                onChange={(event) => update(index, { energyKcal: event.target.value })}
+                className="w-full tabular"
+                placeholder="—"
               />
             </Field>
           </div>

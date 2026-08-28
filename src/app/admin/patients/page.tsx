@@ -14,7 +14,7 @@ export default async function AdminPatientsPage({
   await requireAdminPage()
   const showArchived = (await searchParams).archived === '1'
 
-  const [patients, archivedCount, portalEnabled] = await Promise.all([
+  const [patients, archivedCount, portalEnabled, comorbidities] = await Promise.all([
     prisma.patient.findMany({
       where: { isActive: !showArchived },
       orderBy: { createdAt: 'desc' },
@@ -30,6 +30,7 @@ export default async function AdminPatientsPage({
     }),
     prisma.patient.count({ where: { isActive: false } }),
     isPatientPortalEnabled(),
+    prisma.comorbidity.findMany({ where: { isActive: true }, orderBy: { code: 'asc' } }),
   ])
 
   return (
@@ -52,7 +53,7 @@ export default async function AdminPatientsPage({
         }
       />
 
-      {showArchived ? null : <PatientCreateForm />}
+      {showArchived ? null : <PatientCreateForm comorbidities={comorbidities} />}
 
       <Card>
         {patients.length === 0 ? (

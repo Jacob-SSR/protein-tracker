@@ -13,11 +13,17 @@ export type CreatePatientInput = {
   birthDate?: string | null
   gender?: 'MALE' | 'FEMALE' | 'OTHER' | null
   note?: string | null
-  /** บันทึกน้ำหนักตั้งต้นไปพร้อมกันได้เลย จะได้คำนวณเป้าหมายทันที */
+  /**
+   * ข้อมูลสุขภาพตั้งต้น — บันทึกเป็น "การตรวจครั้งแรก" ไปพร้อมกับการสร้างผู้ป่วย
+   * กรอกเท่าที่มี ไม่มีอะไรบังคับ เจ้าหน้าที่จะได้ไม่ต้องกรอกชื่อผู้ป่วยซ้ำอีกหน้า
+   */
+  measuredOn?: string | null
   weightKg?: number | null
   heightCm?: number | null
-  /** ผลเลือดตั้งต้น — บันทึกเป็นผลตรวจของวันนี้ */
+  dryWeightKg?: number | null
+  hasEdema?: boolean | null
   labs?: { labType: string; value: number; unit?: string }[]
+  comorbidityCodes?: string[] | null
 }
 
 /**
@@ -42,7 +48,7 @@ export async function createPatient(
         },
       })
 
-      const measuredOn = today()
+      const measuredOn = input.measuredOn ? parseDateOnly(input.measuredOn) : today()
 
       if (input.weightKg) {
         await tx.patientMeasurement.create({
@@ -51,6 +57,8 @@ export async function createPatient(
             measuredOn,
             weightKg: new Prisma.Decimal(input.weightKg),
             heightCm: input.heightCm ? new Prisma.Decimal(input.heightCm) : null,
+            dryWeightKg: input.dryWeightKg ? new Prisma.Decimal(input.dryWeightKg) : null,
+            hasEdema: input.hasEdema ?? null,
             recordedById: session.userId,
           },
         })
@@ -74,6 +82,20 @@ export async function createPatient(
         })
       }
 
+      // โรคร่วมเป็นส่วนหนึ่งของการประเมิน กรอกพร้อมกันได้เลย
+      const codes = [...new Set((input.comorbidityCodes ?? []).map((code) => code.toUpperCase()))]
+      if (codes.length > 0) {
+        const comorbidities = await tx.comorbidity.findMany({ where: { code: { in: codes } } })
+        if (comorbidities.length !== codes.length) {
+          throw badRequest('UNKNOWN_COMORBIDITY', 'มีรหัสโรคร่วมที่ระบบไม่รู้จัก')
+        }
+        for (const comorbidity of comorbidities) {
+          await tx.patientComorbidity.create({
+            data: { patientId: patient.id, comorbidityId: comorbidity.id, isActive: true },
+          })
+        }
+      }
+
       await writeAudit(tx, {
         actorId: session.userId,
         action: 'PATIENT_CREATE',
@@ -84,7 +106,10 @@ export async function createPatient(
           fullName: patient.fullName,
           weightKg: input.weightKg ?? null,
           heightCm: input.heightCm ?? null,
+          dryWeightKg: input.dryWeightKg ?? null,
+          hasEdema: input.hasEdema ?? null,
           labs,
+          comorbidityCodes: codes,
         },
         ...meta,
       })

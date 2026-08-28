@@ -81,6 +81,12 @@ const WATER_SETTINGS = [
     description: 'น้ำที่ควรดื่มต่อน้ำหนักตัว 1 กก. ต่อวัน (มล.) — ใช้กับผู้ป่วยที่ไม่ต้องจำกัดน้ำ',
   },
   {
+    key: 'exam_interval_months',
+    value: '3',
+    valueType: 'INT' as const,
+    description: 'ผู้ป่วยควรตรวจสุขภาพทุกกี่เดือน — ใช้บอกว่าถึงรอบตรวจหรือยัง',
+  },
+  {
     key: 'water_reminder_hour',
     value: '20',
     valueType: 'INT' as const,

@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db/prisma'
 import { requestMeta, writeAudit } from '@/lib/audit'
 import { parseDateOnly } from '@/lib/date'
 import { toDecimal } from '@/lib/decimal'
+import { ADMIN_ROLES } from '@/lib/permissions'
 import { requirePatientAccess } from '@/lib/patients/access'
 import { badRequest } from '@/lib/errors'
 
@@ -37,11 +38,12 @@ const bodySchema = z.object({
  * หนึ่งครั้งที่กดบันทึก = หนึ่งทรานแซคชัน = หนึ่งแถวใน Audit Log
  * ถ้าส่วนใดส่วนหนึ่งพัง จะไม่มีอะไรถูกบันทึกเลย ไม่เหลือข้อมูลค้างครึ่งๆ กลางๆ
  *
- * ผู้ป่วยบันทึกของตัวเองได้ — requirePatientAccess กันการยิงใส่ id ของคนอื่น
+ * เฉพาะเจ้าหน้าที่โภชนาการ/แอดมินเท่านั้นที่บันทึกได้
+ * ผลตรวจเป็นเอกสารทางการ ผู้ป่วยแก้เองไม่ได้ ดูได้อย่างเดียว
  */
 export async function POST(request: Request, { params }: Params) {
   return handle(async () => {
-    const session = await requireSession()
+    const session = await requireSession(ADMIN_ROLES)
     const { id } = await params
     await requirePatientAccess(session, id)
 

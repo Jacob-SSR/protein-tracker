@@ -20,7 +20,8 @@ const bodySchema = z.object({
 /**
  * Preview อย่างเดียว — ไม่เขียน ProteinCalculation ลง DB เด็ดขาด
  * แยก endpoint จาก confirm คนละตัวตามสเปก
- * ผู้ป่วยเรียกของตัวเองได้ (requirePatientAccess กันการเดา id ของคนอื่น)
+ * อ่านอย่างเดียว ไม่เขียน DB ผู้ป่วยจึงเรียกดูของตัวเองได้
+ * (requirePatientAccess กันการเดา id ของคนอื่น) ส่วนการ "ยืนยัน" เป็นของเจ้าหน้าที่
  */
 export async function POST(request: Request, { params }: Params) {
   return handle(async () => {

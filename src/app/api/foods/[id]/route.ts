@@ -21,6 +21,7 @@ const patchSchema = z.object({
         unitName: z.string().trim().min(1).max(50),
         gramsPerUnit: z.number().positive().optional(),
         proteinAmount: z.number().min(0),
+        energyKcal: z.number().min(0).max(10000).optional(),
         isDefault: z.boolean().optional(),
       }),
     )
@@ -45,6 +46,7 @@ export async function GET(_request: Request, { params }: Params) {
           ...unit,
           gramsPerUnit: unit.gramsPerUnit ? num(unit.gramsPerUnit) : null,
           proteinAmount: num(unit.proteinAmount),
+          energyKcal: unit.energyKcal === null ? null : num(unit.energyKcal),
         })),
       },
     })
@@ -104,6 +106,7 @@ export async function PATCH(request: Request, { params }: Params) {
           unitName: unit.unitName,
           gramsPerUnit: unit.gramsPerUnit ? toDecimal(unit.gramsPerUnit) : null,
           proteinAmount: toDecimal(unit.proteinAmount),
+          energyKcal: unit.energyKcal === undefined ? null : toDecimal(unit.energyKcal),
           isDefault: unit.isDefault ?? index === 0,
           sortOrder: index,
         }

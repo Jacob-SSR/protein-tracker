@@ -5,6 +5,21 @@ import { num, round2 } from '@/lib/decimal'
 import { getNotifyThresholds, type NotifyThreshold } from '@/lib/settings'
 import { getCalculationForDate } from '@/lib/protein/calculator'
 
+/**
+ * พลังงานที่ทานไปแล้ววันนี้ เทียบกับเป้าหมายที่เจ้าหน้าที่กำหนดไว้
+ *
+ * นับเฉพาะรายการที่มีข้อมูล kcal — อาหารที่ยังไม่ได้ใส่พลังงานจะไม่ถูกเดาค่าให้
+ * itemsWithoutEnergy บอกไปตรงๆ ว่ายอดนี้ยังไม่ครบกี่รายการ ผู้ป่วยจะได้ไม่เข้าใจผิดว่าทานน้อยกว่าจริง
+ */
+export type EnergySummary = {
+  targetKcal: number | null
+  consumedKcal: number
+  remainingKcal: number | null
+  percent: number | null
+  itemsWithEnergy: number
+  itemsWithoutEnergy: number
+}
+
 export type DailySummary = {
   date: string
   targetGrams: number | null
@@ -12,6 +27,7 @@ export type DailySummary = {
   remainingGrams: number | null
   percent: number | null
   notification: NotifyThreshold | null
+  energy: EnergySummary
   meals: {
     id: string
     mealType: MealType
@@ -21,8 +37,10 @@ export type DailySummary = {
       unitName: string
       quantity: number
       proteinAmount: number
+      energyKcal: number | null
     }[]
     subtotalGrams: number
+    subtotalKcal: number
   }[]
 }
 
@@ -55,12 +73,14 @@ export async function getDailySummary(patientId: string, date: Date): Promise<Da
         unitName: item.unitNameSnapshot,
         quantity: num(item.quantity),
         proteinAmount: num(item.proteinAmount),
+        energyKcal: item.energyKcal === null ? null : num(item.energyKcal),
       }))
       return {
         id: meal.id,
         mealType: meal.mealType,
         items,
         subtotalGrams: round2(items.reduce((sum, item) => sum + item.proteinAmount, 0)),
+        subtotalKcal: round2(items.reduce((sum, item) => sum + (item.energyKcal ?? 0), 0)),
       }
     })
 
@@ -69,8 +89,20 @@ export async function getDailySummary(patientId: string, date: Date): Promise<Da
   const percent =
     targetGrams && targetGrams > 0 ? round2((consumedGrams / targetGrams) * 100) : null
 
+  const allItems = mealViews.flatMap((meal) => meal.items)
+  const consumedKcal = round2(allItems.reduce((sum, item) => sum + (item.energyKcal ?? 0), 0))
+  const targetKcal = calculation?.energyTargetKcal ? num(calculation.energyTargetKcal) : null
+
   return {
     date: formatDateOnly(date),
+    energy: {
+      targetKcal,
+      consumedKcal,
+      remainingKcal: targetKcal === null ? null : round2(targetKcal - consumedKcal),
+      percent: targetKcal && targetKcal > 0 ? round2((consumedKcal / targetKcal) * 100) : null,
+      itemsWithEnergy: allItems.filter((item) => item.energyKcal !== null).length,
+      itemsWithoutEnergy: allItems.filter((item) => item.energyKcal === null).length,
+    },
     targetGrams,
     consumedGrams,
     remainingGrams: targetGrams === null ? null : round2(targetGrams - consumedGrams),

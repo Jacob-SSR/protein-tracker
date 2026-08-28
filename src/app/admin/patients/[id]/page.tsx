@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/db/prisma'
 import { requireAdminPage } from '@/lib/auth/guards'
 import { formatDateOnly } from '@/lib/date'
-import { num, optionalNum } from '@/lib/decimal'
+import { num } from '@/lib/decimal'
 import { Badge, Card, EmptyState, PageHeader, Table } from '@/components/ui'
 import { HealthDataForms } from '@/components/health-data-forms'
 import { ProteinTargetPanel } from '@/components/protein-target-panel'
@@ -15,8 +15,11 @@ import { PatientAccountPanel } from '@/components/patient-account-panel'
 import { PatientDangerZone } from '@/components/patient-danger-zone'
 import { WaterCard } from '@/components/water/water-card'
 import { getWaterSummary } from '@/lib/water/service'
+import { getHealthHistory } from '@/lib/patients/health-history'
+import { HealthHistoryView } from '@/components/patient/health-history-view'
 import { getDailySummary } from '@/lib/meals/summary'
-import { isPatientPortalEnabled } from '@/lib/settings'
+import { getExamIntervalMonths, isPatientPortalEnabled } from '@/lib/settings'
+import { buildExamSchedule } from '@/lib/patients/exam-schedule'
 import { getActiveInvite } from '@/lib/patients/invites'
 import { formatDateOnly as toDateString, today } from '@/lib/date'
 
@@ -32,10 +35,6 @@ export default async function AdminPatientPage({ params }: { params: Promise<{ i
       include: {
         user: { select: { username: true } },
         measurements: { orderBy: { measuredOn: 'desc' }, take: 10 },
-        labs: {
-          orderBy: [{ measuredOn: 'desc' }, { createdAt: 'desc' }],
-          take: 30,
-        },
         comorbidities: {
           where: { isActive: true },
           include: { comorbidity: true },
@@ -69,19 +68,22 @@ export default async function AdminPatientPage({ params }: { params: Promise<{ i
 
   const date = today()
   const activeInvite = patient.userId ? null : await getActiveInvite(patient.id)
-  const [summary, weekly, frequentFoods, calculation, counts, water] = await Promise.all([
-    getDailySummary(patient.id, date),
-    getWeeklySummary(patient.id, date),
-    getFrequentFoods(patient.id),
-    getCalculationForDate(patient.id, date),
-    prisma.$transaction([
-      prisma.patientMeasurement.count({ where: { patientId: patient.id } }),
-      prisma.patientLab.count({ where: { patientId: patient.id } }),
-      prisma.proteinCalculation.count({ where: { patientId: patient.id } }),
-      prisma.mealItem.count({ where: { meal: { patientId: patient.id } } }),
-    ]),
-    getWaterSummary(patient.id, date),
-  ])
+  const [summary, weekly, frequentFoods, calculation, counts, water, history, examMonths] =
+    await Promise.all([
+      getDailySummary(patient.id, date),
+      getWeeklySummary(patient.id, date),
+      getFrequentFoods(patient.id),
+      getCalculationForDate(patient.id, date),
+      prisma.$transaction([
+        prisma.patientMeasurement.count({ where: { patientId: patient.id } }),
+        prisma.patientLab.count({ where: { patientId: patient.id } }),
+        prisma.proteinCalculation.count({ where: { patientId: patient.id } }),
+        prisma.mealItem.count({ where: { meal: { patientId: patient.id } } }),
+      ]),
+      getWaterSummary(patient.id, date),
+      getHealthHistory(patient.id),
+      getExamIntervalMonths(),
+    ])
 
   return (
     <div className="flex flex-col gap-6">
@@ -90,6 +92,23 @@ export default async function AdminPatientPage({ params }: { params: Promise<{ i
         description={`HN ${patient.hn} · ${patient.birthDate ? `เกิด ${formatDateOnly(patient.birthDate)}` : 'ไม่ระบุวันเกิด'}${
           patient.gender ? ` · ${GENDER_LABELS[patient.gender]}` : ''
         }`}
+      />
+
+      <HealthDataForms
+        title="บันทึกผลตรวจครั้งใหม่"
+        patientId={patient.id}
+        schedule={buildExamSchedule(history.latest?.date ?? null, examMonths)}
+        previousLabs={history.latest?.labs ?? []}
+        patient={{
+          gender: patient.gender,
+          ageYears: patientAgeYears,
+          heightCm: latestHeight ? num(latestHeight.heightCm) : null,
+          weightKg: latestMeasurement ? num(latestMeasurement.weightKg) : null,
+          dryWeightKg: latestDry ? num(latestDry.dryWeightKg) : null,
+          lastMeasuredOn: latestMeasurement ? formatDateOnly(latestMeasurement.measuredOn) : null,
+        }}
+        comorbidities={comorbidities}
+        selectedCodes={patient.comorbidities.map((row) => row.comorbidity.code)}
       />
 
       <ProteinTargetPanel patientId={patient.id} />
@@ -111,19 +130,7 @@ export default async function AdminPatientPage({ params }: { params: Promise<{ i
         weeklyHref={`/admin/patients/${patient.id}`}
       />
 
-      <HealthDataForms
-        patientId={patient.id}
-        patient={{
-          gender: patient.gender,
-          ageYears: patientAgeYears,
-          heightCm: latestHeight ? num(latestHeight.heightCm) : null,
-          weightKg: latestMeasurement ? num(latestMeasurement.weightKg) : null,
-          dryWeightKg: latestDry ? num(latestDry.dryWeightKg) : null,
-          lastMeasuredOn: latestMeasurement ? formatDateOnly(latestMeasurement.measuredOn) : null,
-        }}
-        comorbidities={comorbidities}
-        selectedCodes={patient.comorbidities.map((row) => row.comorbidity.code)}
-      />
+      <HealthHistoryView history={history} />
 
       {portalEnabled ? (
         <PatientAccountPanel
@@ -133,39 +140,6 @@ export default async function AdminPatientPage({ params }: { params: Promise<{ i
           activeInvite={activeInvite ? { expiresAt: activeInvite.expiresAt.toISOString() } : null}
         />
       ) : null}
-
-      <Card title="ประวัติน้ำหนัก / ส่วนสูง">
-        {patient.measurements.length === 0 ? (
-          <EmptyState>ยังไม่มีข้อมูล</EmptyState>
-        ) : (
-          <Table head={['วันที่วัด', 'น้ำหนัก (kg)', 'ส่วนสูง (cm)']}>
-            {patient.measurements.map((row) => (
-              <tr key={row.id} className="border-b border-line last:border-0">
-                <td className="px-3 py-2">{formatDateOnly(row.measuredOn)}</td>
-                <td className="px-3 py-2 tabular">{num(row.weightKg)}</td>
-                <td className="px-3 py-2 tabular">{optionalNum(row.heightCm) ?? '—'}</td>
-              </tr>
-            ))}
-          </Table>
-        )}
-      </Card>
-
-      <Card title="ผลเลือด">
-        {patient.labs.length === 0 ? (
-          <EmptyState>ยังไม่มีข้อมูล</EmptyState>
-        ) : (
-          <Table head={['รายการ', 'ค่า', 'หน่วย', 'วันที่ตรวจ']}>
-            {patient.labs.map((row) => (
-              <tr key={row.id} className="border-b border-line last:border-0">
-                <td className="px-3 py-2 font-mono text-xs">{row.labType}</td>
-                <td className="px-3 py-2 tabular">{num(row.value)}</td>
-                <td className="px-3 py-2 text-muted">{row.unit ?? '—'}</td>
-                <td className="px-3 py-2">{formatDateOnly(row.measuredOn)}</td>
-              </tr>
-            ))}
-          </Table>
-        )}
-      </Card>
 
       <Card
         title="ประวัติเป้าหมายโปรตีน"

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { handle, ok, requireSession } from '@/lib/api'
 import { requestMeta } from '@/lib/audit'
+import { ADMIN_ROLES } from '@/lib/permissions'
 import { requirePatientAccess } from '@/lib/patients/access'
 import { confirmProteinTarget } from '@/lib/protein/calculation-service'
 import { ENERGY_FACTORS_KCAL } from '@/lib/protein/body-metrics'
@@ -20,10 +21,13 @@ const bodySchema = z.object({
     .nullish(),
 })
 
-/** ผู้ป่วยยืนยันเป้าหมายของตัวเองได้ — ทุกครั้งถูกบันทึกลง Audit Log ว่าใครเป็นคนกด */
+/**
+ * ยืนยันเป้าหมาย = ออกผลประเมินทางการ เฉพาะเจ้าหน้าที่โภชนาการ/แอดมิน
+ * ทุกครั้งถูกบันทึกลง Audit Log ว่าใครเป็นคนกด
+ */
 export async function POST(request: Request, { params }: Params) {
   return handle(async () => {
-    const session = await requireSession()
+    const session = await requireSession(ADMIN_ROLES)
     const { id } = await params
     await requirePatientAccess(session, id)
 

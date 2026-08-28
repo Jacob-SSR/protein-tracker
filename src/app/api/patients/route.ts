@@ -46,9 +46,14 @@ const createSchema = z.object({
   birthDate: z.string().optional().or(z.literal('')),
   gender: z.enum(['MALE', 'FEMALE', 'OTHER']).optional(),
   note: z.string().trim().max(500).optional(),
+  /** วันที่ตรวจของการตรวจครั้งแรก ไม่ส่ง = วันนี้ */
+  measuredOn: z.string().optional(),
   weightKg: z.number().positive().max(500).optional(),
   heightCm: z.number().positive().max(300).optional(),
-  /** ผลเลือดตั้งต้น บันทึกเป็นผลตรวจของวันนี้ไปพร้อมกับการสร้างผู้ป่วย */
+  dryWeightKg: z.number().positive().max(500).optional(),
+  hasEdema: z.boolean().optional(),
+  comorbidityCodes: z.array(z.string().trim().min(1)).max(50).optional(),
+  /** ผลเลือดตั้งต้น บันทึกเป็นผลตรวจครั้งแรกไปพร้อมกับการสร้างผู้ป่วย */
   labs: z
     .array(
       z.object({

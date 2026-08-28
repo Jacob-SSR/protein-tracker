@@ -42,6 +42,7 @@ function snapshotOf(item: {
   unitNameSnapshot: string
   quantity: Prisma.Decimal
   proteinAmount: Prisma.Decimal
+  energyKcal: Prisma.Decimal | null
 }) {
   return {
     id: item.id,
@@ -51,7 +52,17 @@ function snapshotOf(item: {
     unitName: item.unitNameSnapshot,
     quantity: num(item.quantity),
     proteinAmount: num(item.proteinAmount),
+    energyKcal: item.energyKcal === null ? null : num(item.energyKcal),
   }
+}
+
+/**
+ * พลังงานของรายการนี้ = kcal ต่อหน่วย x จำนวน
+ * หน่วยที่ยังไม่ได้ใส่ kcal คืน null ไม่เดาค่าให้ — ยอดรวมของวันจะได้ไม่หลอกตา
+ */
+function energyOf(unitEnergyKcal: Prisma.Decimal | null, quantity: number) {
+  if (unitEnergyKcal === null) return null
+  return round2(num(unitEnergyKcal) * quantity)
 }
 
 async function loadFoodUnit(foodUnitId: string) {
@@ -84,6 +95,7 @@ export async function addMealItem(input: AddMealItemInput) {
   const unit = await loadFoodUnit(input.foodUnitId)
   // snapshot ไว้เลย ไม่คำนวณสดจาก Food ทุกครั้ง — แก้ราคาโปรตีนทีหลังต้องไม่กระทบของเก่า
   const proteinAmount = round2(num(unit.proteinAmount) * input.quantity)
+  const energyKcal = energyOf(unit.energyKcal, input.quantity)
 
   return prisma.$transaction(async (tx) => {
     const meal = await tx.meal.upsert({
@@ -111,6 +123,7 @@ export async function addMealItem(input: AddMealItemInput) {
         unitNameSnapshot: unit.unitName,
         quantity: toDecimal(input.quantity),
         proteinAmount: toDecimal(proteinAmount),
+        energyKcal: energyKcal === null ? null : toDecimal(energyKcal),
         createdById: input.actorId,
       },
     })
@@ -163,6 +176,7 @@ export async function updateMealItem(input: {
 
   const unit = await loadFoodUnit(input.foodUnitId ?? existing.foodUnitId)
   const proteinAmount = round2(num(unit.proteinAmount) * input.quantity)
+  const energyKcal = energyOf(unit.energyKcal, input.quantity)
   const oldValue = snapshotOf(existing)
 
   return prisma.$transaction(async (tx) => {
@@ -175,6 +189,7 @@ export async function updateMealItem(input: {
         unitNameSnapshot: unit.unitName,
         quantity: toDecimal(input.quantity),
         proteinAmount: toDecimal(proteinAmount),
+        energyKcal: energyKcal === null ? null : toDecimal(energyKcal),
       },
     })
 

@@ -21,6 +21,8 @@ export const SETTING_KEYS = {
   WATER_RESTRICTED_MAX_ML: 'water_restricted_max_ml',
   /** เริ่มเตือน "ยังดื่มไม่ครบ" ตั้งแต่กี่โมง (0-23) */
   WATER_REMINDER_HOUR: 'water_reminder_hour',
+  /** รอบการตรวจสุขภาพ (เดือน) — ค่ามาตรฐานคือทุก 3 เดือน */
+  EXAM_INTERVAL_MONTHS: 'exam_interval_months',
 } as const
 
 export const SETTING_DEFAULTS: Record<
@@ -62,6 +64,11 @@ export const SETTING_DEFAULTS: Record<
     value: '20',
     valueType: 'INT',
     description: 'เริ่มเตือนว่ายังดื่มน้ำไม่ครบตั้งแต่กี่โมง (0-23) — ค่าเริ่มต้น 20 น.',
+  },
+  [SETTING_KEYS.EXAM_INTERVAL_MONTHS]: {
+    value: '3',
+    valueType: 'INT',
+    description: 'ผู้ป่วยควรตรวจสุขภาพทุกกี่เดือน — ใช้บอกว่าถึงรอบตรวจหรือยัง',
   },
   [SETTING_KEYS.NOTIFY_THRESHOLDS]: {
     value: JSON.stringify([
@@ -137,6 +144,10 @@ export async function getWaterSettings(): Promise<{
   return { glassSizeMl, mlPerKg, restrictedMaxMl, reminderHour }
 }
 
+export async function getExamIntervalMonths(): Promise<number> {
+  return getIntSetting(SETTING_KEYS.EXAM_INTERVAL_MONTHS)
+}
+
 export async function getNotifyThresholds(): Promise<NotifyThreshold[]> {
   try {
     const parsed = JSON.parse(await readRaw(SETTING_KEYS.NOTIFY_THRESHOLDS))
@@ -190,6 +201,14 @@ export function validateKnownSetting(key: string, value: string) {
   if (key === SETTING_KEYS.WATER_REMINDER_HOUR) {
     const hour = Number.parseInt(value, 10)
     if (!Number.isInteger(hour) || hour < 0 || hour > 23) throw new Error('ต้องเป็นชั่วโมง 0-23')
+    return
+  }
+
+  if (key === SETTING_KEYS.EXAM_INTERVAL_MONTHS) {
+    const months = Number.parseInt(value, 10)
+    if (!Number.isInteger(months) || months < 1 || months > 24) {
+      throw new Error('ต้องเป็นจำนวนเดือน 1-24')
+    }
     return
   }
 

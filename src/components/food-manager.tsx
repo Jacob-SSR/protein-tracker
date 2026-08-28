@@ -28,6 +28,7 @@ type Food = {
     unitName: string
     gramsPerUnit: number | null
     proteinAmount: number
+    energyKcal: number | null
     isDefault: boolean
   }[]
 }
@@ -181,6 +182,9 @@ export function FoodManager({ foods }: { foods: Food[] }) {
                             <span className="text-muted tabular">({unit.gramsPerUnit} g)</span>
                           ) : null}
                           <span className="text-muted tabular">โปรตีน {unit.proteinAmount} g</span>
+                          {unit.energyKcal !== null ? (
+                            <span className="text-muted tabular">· {unit.energyKcal} kcal</span>
+                          ) : null}
                           {unit.isDefault ? <Badge tone="brand">หลัก</Badge> : null}
                         </li>
                       ))}
@@ -245,6 +249,7 @@ export function FoodManager({ foods }: { foods: Food[] }) {
                                     unitName: unit.unitName,
                                     gramsPerUnit: unit.gramsPerUnit ?? undefined,
                                     proteinAmount: unit.proteinAmount,
+                                    energyKcal: unit.energyKcal ?? undefined,
                                     isDefault: unit.isDefault,
                                   })),
                                 },
@@ -391,6 +396,7 @@ function FoodForm({
           unitName: unit.unitName,
           gramsPerUnit: unit.gramsPerUnit === null ? '' : String(unit.gramsPerUnit),
           proteinAmount: String(unit.proteinAmount),
+          energyKcal: unit.energyKcal === null ? '' : String(unit.energyKcal),
           isDefault: unit.isDefault,
         }))
       : [{ ...emptyUnit(), isDefault: true }],

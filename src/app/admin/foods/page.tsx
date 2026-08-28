@@ -44,6 +44,7 @@ export default async function AdminFoodsPage() {
             unitName: unit.unitName,
             gramsPerUnit: unit.gramsPerUnit ? num(unit.gramsPerUnit) : null,
             proteinAmount: num(unit.proteinAmount),
+            energyKcal: unit.energyKcal === null ? null : num(unit.energyKcal),
             isDefault: unit.isDefault,
           })),
         }))}
