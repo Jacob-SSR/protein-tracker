@@ -1,3 +1,4 @@
+import { APP_NAME } from '@/lib/branding'
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono, Noto_Sans_Thai } from 'next/font/google'
 import './globals.css'
@@ -14,8 +15,8 @@ const notoSansThai = Noto_Sans_Thai({
 })
 
 export const metadata: Metadata = {
-  title: 'Protein Tracker',
-  description: 'ระบบติดตามการบริโภคโปรตีนสำหรับผู้ป่วยโรคไต',
+  title: APP_NAME,
+  description: `${APP_NAME} — ระบบติดตามโปรตีนและพลังงานสำหรับผู้ป่วยโรคไต`,
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

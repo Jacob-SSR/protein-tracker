@@ -109,6 +109,9 @@ const COMORBIDITIES = [
   { code: 'NEPHRITIS', name: 'โรคไตอักเสบ' },
   { code: 'NEPHROTIC', name: 'กลุ่มโรคไตเนโฟรติก' },
   { code: 'OTHER', name: 'โรคอื่นๆ' },
+  // สองรายการล่างใช้เลือกช่วงโปรตีนตามแนวทาง ไม่ใช่ชื่อโรคตรงๆ แต่ติ๊กที่เดียวกันได้สะดวกกว่า
+  { code: 'ESRD_RISK', name: 'เสี่ยงเป็นไตวายระยะสุดท้าย' },
+  { code: 'PEW', name: 'ภาวะสูญเสียโปรตีนและพลังงาน (PEW)' },
 ]
 
 async function main() {

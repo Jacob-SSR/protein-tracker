@@ -43,12 +43,17 @@ export default async function PatientHealthPage() {
           <div className="grid gap-3 sm:grid-cols-3">
             <Target
               label="โปรตีน"
-              value={`🥄 ประมาณ ${toSpoonDisplay(num(calculation.proteinTargetGrams)).text} ช้อน`}
-              note={`${num(calculation.proteinTargetGrams)} กรัม/วัน${
-                toSpoonDisplay(num(calculation.proteinTargetGrams)).rounded
-                  ? ' · ปัดเป็นปริมาณที่ตวงได้ง่าย'
-                  : ''
-              }`}
+              value={`🥄 ประมาณ ${proteinSpoonLabel(
+                calculation.proteinTargetGramsMin === null
+                  ? null
+                  : num(calculation.proteinTargetGramsMin),
+                num(calculation.proteinTargetGrams),
+              )} ช้อน`}
+              note={`${
+                calculation.proteinTargetGramsMin === null
+                  ? num(calculation.proteinTargetGrams)
+                  : `${num(calculation.proteinTargetGramsMin)}–${num(calculation.proteinTargetGrams)}`
+              } กรัม/วัน · ปัดเป็นปริมาณที่ตวงได้ง่าย`}
             />
             <Target
               label="พลังงาน"
@@ -92,4 +97,12 @@ function Target({ label, value, note }: { label: string; value: string; note: st
       <p className="tabular mt-0.5 text-xs text-muted">{note}</p>
     </div>
   )
+}
+
+/** แนวทางให้โปรตีนมาเป็นช่วง — ปัดทั้งสองขอบแล้วค่อยรวมเป็นข้อความเดียว */
+function proteinSpoonLabel(minGrams: number | null, maxGrams: number) {
+  const max = toSpoonDisplay(maxGrams)
+  if (minGrams === null) return max.text
+  const min = toSpoonDisplay(minGrams)
+  return min.text === max.text ? max.text : `${min.text}–${max.text}`
 }

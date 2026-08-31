@@ -14,6 +14,7 @@ type Energy = {
 
 type Summary = {
   date: string
+  targetGramsMin: number | null
   targetGrams: number | null
   consumedGrams: number
   remainingGrams: number | null
@@ -79,6 +80,13 @@ export function DailyOverview({
   // โปรตีนโชว์เป็นช้อนที่ตวงได้จริง (ปัดเป็นจำนวนเต็ม/เศษ ¼) ส่วนกรัมยังเป็นหน่วยที่ระบบคำนวณ
   const consumed = toSpoonDisplay(summary.consumedGrams)
   const target = toSpoonDisplay(summary.targetGrams)
+  // แนวทางกำหนดโปรตีนมาเป็นช่วง ไม่ใช่ตัวเลขเดียว — โชว์เป็นช่วงตามนั้น
+  // เพดานของช่วงคือค่าที่ใช้เตือนว่าทานเกิน
+  const targetMin = toSpoonDisplay(summary.targetGramsMin)
+  const targetLabel =
+    targetMin.value !== null && targetMin.text !== target.text
+      ? `${targetMin.text}–${target.text}`
+      : target.text
   const remaining = toSpoonDisplay(
     summary.remainingGrams === null ? null : Math.abs(summary.remainingGrams),
   )
@@ -132,16 +140,20 @@ export function DailyOverview({
             <ProgressRing
               percent={summary.percent ?? 0}
               tone={over ? 'danger' : 'brand'}
-              ariaLabel={`ทานโปรตีนแล้ว ${consumed.text} จากเป้าหมาย ${target.text} ช้อน`}
+              ariaLabel={`ทานโปรตีนแล้ว ${consumed.text} จากเป้าหมาย ${targetLabel} ช้อน`}
             />
             <div className="min-w-40 flex-1">
               <p className="flex items-baseline gap-1.5">
                 <span aria-hidden>🥄</span>
                 <span className="text-4xl font-semibold text-brand">{consumed.text}</span>
-                <span className="text-lg text-muted">/ {target.text} ช้อน</span>
+                <span className="text-lg text-muted">/ {targetLabel} ช้อน</span>
               </p>
               <p className="tabular mt-0.5 text-xs text-muted">
-                {summary.consumedGrams} / {summary.targetGrams ?? '—'} กรัม
+                {summary.consumedGrams} /{' '}
+                {summary.targetGramsMin !== null && summary.targetGrams !== null
+                  ? `${summary.targetGramsMin}–${summary.targetGrams}`
+                  : (summary.targetGrams ?? '—')}{' '}
+                กรัม
                 {consumed.rounded || target.rounded ? ' · ปัดเป็นปริมาณที่ตวงได้ง่าย' : ''}
               </p>
               <p className="mt-2 text-sm">

@@ -22,6 +22,9 @@ export type EnergySummary = {
 
 export type DailySummary = {
   date: string
+  /** ขอบล่างของช่วงที่แนวทางกำหนด — null = เป้าหมายเก่าที่เก็บเป็นค่าเดี่ยว */
+  targetGramsMin: number | null
+  /** ขอบบนของช่วง = เพดานที่ใช้เตือนว่าทานเกิน */
   targetGrams: number | null
   consumedGrams: number
   remainingGrams: number | null
@@ -95,6 +98,9 @@ export async function getDailySummary(patientId: string, date: Date): Promise<Da
 
   return {
     date: formatDateOnly(date),
+    targetGramsMin: calculation?.proteinTargetGramsMin
+      ? num(calculation.proteinTargetGramsMin)
+      : null,
     energy: {
       targetKcal,
       consumedKcal,

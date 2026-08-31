@@ -33,6 +33,12 @@ type Preview = {
   blockedReason: string | null
   proteinFactor: number | null
   proteinTargetGrams: number | null
+  guideline: {
+    group: 'PEW' | 'ESRD_RISK' | 'STANDARD'
+    basisLabel: string
+    factorRange: { min: number; max: number } | null
+    gramsRange: { min: number; max: number } | null
+  }
   energyFactorKcal: number | null
   energyTargetKcal: number | null
   water: {
@@ -115,6 +121,11 @@ export function ProteinTargetPanel({ patientId }: { patientId: string }) {
       // ครั้งแรกยังไม่มีใครเลือก — ติ๊กตามที่ระบบแนะนำจากระยะไตให้เลย
       if (weightBasis === null) {
         setWeightBasis(data.preview.suggestedWeightBasis ?? data.preview.weightBasis)
+      }
+      // พลังงานระบบเลือกให้จากอายุอยู่แล้ว (ต่ำกว่า 60 ปี = 35, ตั้งแต่ 60 ปี = 30)
+      // ติ๊กปุ่มให้ตรงกับที่ใช้จริง เจ้าหน้าที่จะได้เห็นว่ากำลังใช้ค่าไหน
+      if (energyFactor === null && data.preview.energyFactorKcal !== null) {
+        setEnergyFactor(data.preview.energyFactorKcal)
       }
     } catch (cause) {
       setError((cause as Error).message)
@@ -245,8 +256,10 @@ export function ProteinTargetPanel({ patientId }: { patientId: string }) {
 
             <section className="flex flex-col gap-2">
               <p className="text-sm font-medium">
-                พลังงานที่ต้องการ / น้ำหนักตัว 1 กก.
-                <span className="ml-2 font-normal text-muted">กดซ้ำเพื่อยกเลิก</span>
+                พลังงานที่ต้องการ / น้ำหนักที่ควรจะเป็น 1 กก.
+                <span className="ml-2 font-normal text-muted">
+                  ระบบเลือกตามอายุให้แล้ว (ต่ำกว่า 60 ปี = 35, ตั้งแต่ 60 ปี = 30) — กดเปลี่ยนได้
+                </span>
               </p>
               <div className="flex flex-wrap gap-2">
                 {ENERGY_FACTORS_KCAL.map((factor) => (
@@ -278,10 +291,16 @@ export function ProteinTargetPanel({ patientId }: { patientId: string }) {
               <div>
                 <p className="text-xs text-muted">โปรตีนใหม่</p>
                 <p className="tabular text-2xl font-semibold text-brand">
-                  {preview.proteinTargetGrams === null
+                  {preview.guideline.gramsRange === null
                     ? 'คำนวณไม่ได้'
-                    : `${preview.proteinTargetGrams} g`}
+                    : `${preview.guideline.gramsRange.min}–${preview.guideline.gramsRange.max} g`}
                 </p>
+                {preview.guideline.factorRange ? (
+                  <p className="text-xs text-muted">
+                    {preview.guideline.factorRange.min}–{preview.guideline.factorRange.max} ก./กก. ·{' '}
+                    {preview.guideline.basisLabel}
+                  </p>
+                ) : null}
               </div>
               <div>
                 <p className="text-xs text-muted">พลังงาน</p>

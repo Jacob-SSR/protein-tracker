@@ -10,6 +10,7 @@ import { request } from '@/lib/client/api'
 
 type Summary = {
   date: string
+  targetGramsMin: number | null
   targetGrams: number | null
   consumedGrams: number
   remainingGrams: number | null
@@ -189,11 +190,16 @@ export function ProteinWorkspace({
             tone="brand"
             label="เป้าหมายโปรตีนต่อวัน"
             value={toSpoonDisplay(summary.targetGrams)}
+            rangeFrom={toSpoonDisplay(summary.targetGramsMin)}
             unit="ช้อน/วัน"
             note={
               summary.targetGrams === null
                 ? 'ยังไม่ได้กำหนดเป้าหมาย'
-                : `${summary.targetGrams} กรัม · คำนวณจาก${weightBasisLabel ?? 'น้ำหนัก'} ${referenceWeightKg ?? '—'} กก.`
+                : `${
+                    summary.targetGramsMin === null
+                      ? summary.targetGrams
+                      : `${summary.targetGramsMin}–${summary.targetGrams}`
+                  } กรัม · คำนวณจาก${weightBasisLabel ?? 'น้ำหนัก'} ${referenceWeightKg ?? '—'} กก.`
             }
           />
           <StatCard
@@ -565,12 +571,15 @@ function StatCard({
   tone,
   label,
   value,
+  rangeFrom,
   unit,
   note,
 }: {
   tone: 'brand' | 'info' | 'accent' | 'danger'
   label: string
   value: SpoonDisplay
+  /** ขอบล่างของช่วง ถ้ามี — แนวทางกำหนดโปรตีนมาเป็นช่วง ไม่ใช่ตัวเลขเดียว */
+  rangeFrom?: SpoonDisplay
   unit: string
   note: string
 }) {
@@ -589,7 +598,11 @@ function StatCard({
           <span className="text-lg font-medium text-muted">ยังไม่มีข้อมูล</span>
         ) : (
           <>
-            <span className="text-3xl font-semibold">{value.text}</span>
+            <span className="text-3xl font-semibold">
+              {rangeFrom && rangeFrom.value !== null && rangeFrom.text !== value.text
+                ? `${rangeFrom.text}–${value.text}`
+                : value.text}
+            </span>
             <span className="text-xs">{unit}</span>
           </>
         )}

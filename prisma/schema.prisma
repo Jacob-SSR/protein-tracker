@@ -296,34 +296,40 @@ model ProteinRuleCondition {
 
 // Snapshot ของผลการคำนวณ — ห้าม update ค่าเดิม ปิดแถวเก่าด้วย effectiveTo แล้วสร้างแถวใหม่เสมอ
 model ProteinCalculation {
-  id                 String      @id @default(cuid())
-  patientId          String
-  ruleId             String?
-  ruleVersion        Int?
-  ruleNameSnapshot   String?
+  id                    String      @id @default(cuid())
+  patientId             String
+  ruleId                String?
+  ruleVersion           Int?
+  ruleNameSnapshot      String?
   /// ฐานน้ำหนักที่กฎกำหนดไว้ ณ ตอนคำนวณ — เก็บไว้เพื่ออธิบายผลย้อนหลังได้
-  weightBasis        WeightBasis @default(ACTUAL)
+  weightBasis           WeightBasis @default(ACTUAL)
   /// น้ำหนักที่ถูกนำไปคูณจริง (ตาม weightBasis) ไม่ใช่น้ำหนักที่ชั่งได้เสมอไป
-  referenceWeightKg  Decimal     @db.Decimal(6, 2)
-  proteinFactor      Decimal     @db.Decimal(5, 3)
-  proteinTargetGrams Decimal     @db.Decimal(7, 2)
+  referenceWeightKg     Decimal     @db.Decimal(6, 2)
+  /// ขอบล่างของช่วงที่แนวทางกำหนด — null = ค่าเก่าก่อนมีระบบช่วง
+  proteinFactorMin      Decimal?    @db.Decimal(5, 3)
+  proteinTargetGramsMin Decimal?    @db.Decimal(7, 2)
+  /// ขอบบนของช่วง (เป็นเพดานที่ใช้เตือนเวลาทานเกิน)
+  proteinFactor         Decimal     @db.Decimal(5, 3)
+  proteinTargetGrams    Decimal     @db.Decimal(7, 2)
+  /// กลุ่มตามแนวทาง: STANDARD / ESRD_RISK / PEW
+  guidelineGroup        String?
   /// พลังงานที่ต้องการต่อน้ำหนักตัว 1 kg (20/25/30/35/40/45 kcal) — null = ไม่ได้กำหนด
-  energyFactorKcal   Int?
+  energyFactorKcal      Int?
   /// energyFactorKcal x referenceWeightKg ณ ตอนยืนยัน
-  energyTargetKcal   Decimal?    @db.Decimal(8, 2)
+  energyTargetKcal      Decimal?    @db.Decimal(8, 2)
   /// เป้าหมายน้ำดื่มต่อวัน (มล.) ณ ตอนยืนยัน — dashboard อ่านค่านี้ ไม่คำนวณสดทุกครั้ง
-  waterTargetMl      Int?
+  waterTargetMl         Int?
   /// ระยะโรคไตที่คำนวณได้ ณ ตอนยืนยัน (G1-G5) เก็บไว้อธิบายผลย้อนหลัง
-  ckdStageCode       String?
-  egfr               Decimal?    @db.Decimal(6, 2)
+  ckdStageCode          String?
+  egfr                  Decimal?    @db.Decimal(6, 2)
   // snapshot ของ input ทั้งหมดที่ใช้คำนวณ (weight, labs, comorbidities, rule) — อ่าน/เขียนทั้งก้อน
-  inputSnapshot      Json
-  note               String?
-  effectiveFrom      DateTime    @db.Date
-  effectiveTo        DateTime?   @db.Date
-  confirmedById      String
-  confirmedAt        DateTime    @default(now())
-  createdAt          DateTime    @default(now())
+  inputSnapshot         Json
+  note                  String?
+  effectiveFrom         DateTime    @db.Date
+  effectiveTo           DateTime?   @db.Date
+  confirmedById         String
+  confirmedAt           DateTime    @default(now())
+  createdAt             DateTime    @default(now())
 
   patient     Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
   confirmedBy User    @relation(fields: [confirmedById], references: [id])

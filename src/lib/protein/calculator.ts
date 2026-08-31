@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/db/prisma'
 import { formatDateOnly, today } from '@/lib/date'
-import { num, round2 } from '@/lib/decimal'
+import { num } from '@/lib/decimal'
 import { notFound, badRequest } from '@/lib/errors'
 import {
   adjustedBodyWeightKg,
@@ -19,6 +19,15 @@ import {
   type PatientFacts,
   type RuleEvaluation,
 } from './rules'
+import {
+  energyFactorForAge,
+  guidelineBasisLabel,
+  guidelineGroupFrom,
+  proteinGramsRange,
+  proteinRangePerKg,
+  type GuidelineGroup,
+  type ProteinRange,
+} from './ckd-guideline'
 import { getWaterSettings } from '@/lib/settings'
 import { computeWaterTarget, type WaterTarget } from '@/lib/water/target'
 import type { WeightBasis } from '@prisma/client'
@@ -40,8 +49,16 @@ export type ProteinPreview = {
   ckd: (CkdStage & { egfr: number | null; egfrSource: 'LAB' | 'ESTIMATED' | null }) | null
   /** เหตุผลที่คำนวณไม่ได้ เช่น ใช้ IBW แต่ไม่มีส่วนสูง */
   blockedReason: string | null
+  /** ขอบบนของช่วง — ใช้เป็นเพดานเวลาเตือนว่าทานเกิน */
   proteinFactor: number | null
   proteinTargetGrams: number | null
+  /** ช่วงที่แนวทางกำหนด (ต่อน้ำหนักที่ควรจะเป็น 1 กก. และเป็นกรัมต่อวัน) */
+  guideline: {
+    group: GuidelineGroup
+    basisLabel: string
+    factorRange: ProteinRange | null
+    gramsRange: ProteinRange | null
+  }
   energyFactorKcal: number | null
   energyTargetKcal: number | null
   /** เป้าหมายน้ำดื่มต่อวัน คิดจากน้ำหนักฐานเดียวกับโปรตีน */
@@ -197,21 +214,25 @@ export async function previewProteinTarget(
 
   const current = await getActiveCalculation(patientId)
 
-  const proteinFactor = selected?.proteinFactor ?? null
+  const stage = ckdStageFromEgfr(facts.egfr)
+
+  // แนวทางของโรงพยาบาลคิดจาก "น้ำหนักที่ควรจะเป็น" เสมอ ทั้งโปรตีนและพลังงาน
+  // ฐานอื่นยังเลือกเองได้ถ้าเจ้าหน้าที่มีเหตุผล แต่ค่าตั้งต้นคือ IBW
+  const group = guidelineGroupFrom(facts.comorbidityCodes)
+  const factorRange = proteinRangePerKg(facts.ckdStage, group)
   const suggested = suggestedWeightBasis(facts.ckdStage)
-  // คนเลือกเองมาก่อน ไม่เลือกก็ใช้ฐานที่กฎกำหนดไว้
-  const weightBasis = options.weightBasis ?? selected?.weightBasis ?? null
+  const weightBasis = options.weightBasis ?? 'IBW'
   const weightBasisSource = options.weightBasis ? 'MANUAL' : 'RULE'
 
-  const reference = weightBasis
-    ? resolveReferenceWeight(facts, weightBasis)
-    : { weightKg: null, reason: undefined }
-  const proteinTargetGrams =
-    proteinFactor === null || reference.weightKg === null
-      ? null
-      : round2(proteinFactor * reference.weightKg)
+  const reference = resolveReferenceWeight(facts, weightBasis)
+  const gramsRange = proteinGramsRange(factorRange, reference.weightKg)
+  // เพดานของช่วงคือค่าที่ระบบใช้เตือนว่าทานเกิน
+  const proteinFactor = factorRange?.max ?? null
+  const proteinTargetGrams = gramsRange?.max ?? null
 
-  const stage = ckdStageFromEgfr(facts.egfr)
+  // พลังงานมาจากอายุตามตาราง: ต่ำกว่า 60 ปีคูณ 35, ตั้งแต่ 60 ปีคูณ 30
+  // เจ้าหน้าที่ยังปรับเองได้ถ้าเคสไหนต้องการต่างจากนี้
+  const energyFactor = options.energyFactorKcal ?? energyFactorForAge(facts.ageYears)
   const water = computeWaterTarget(
     {
       referenceWeightKg: reference.weightKg,
@@ -233,11 +254,21 @@ export async function previewProteinTarget(
     weightBasisSource,
     suggestedWeightBasis: suggested,
     ckd: stage ? { ...stage, egfr: facts.egfr, egfrSource: facts.egfrSource } : null,
-    blockedReason: reference.reason ?? null,
+    blockedReason:
+      reference.reason ??
+      (factorRange === null
+        ? 'ยังไม่รู้ระยะโรคไต — กรอก eGFR หรือ Creatinine ก่อน ระบบถึงจะบอกช่วงโปรตีนได้'
+        : null),
     proteinFactor,
     proteinTargetGrams,
-    energyFactorKcal: options.energyFactorKcal ?? null,
-    energyTargetKcal: energyTargetKcal(options.energyFactorKcal, reference.weightKg),
+    guideline: {
+      group,
+      basisLabel: guidelineBasisLabel(group, stage?.label ?? null),
+      factorRange,
+      gramsRange,
+    },
+    energyFactorKcal: energyFactor,
+    energyTargetKcal: energyTargetKcal(energyFactor, reference.weightKg),
     water,
     effectiveFrom: formatDateOnly(effectiveFrom),
     current: current

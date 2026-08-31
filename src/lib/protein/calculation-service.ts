@@ -50,16 +50,20 @@ export async function confirmProteinTarget(input: ConfirmInput) {
   const proteinFactor = preview.proteinFactor
   const proteinTargetGrams = preview.proteinTargetGrams
   const referenceWeightKg = preview.referenceWeightKg
-  const weightBasis = preview.weightBasis ?? selected?.weightBasis ?? 'ACTUAL'
+  const weightBasis = preview.weightBasis ?? 'IBW'
+  const gramsRange = preview.guideline.gramsRange
+  const factorRange = preview.guideline.factorRange
 
-  if (!selected || proteinFactor === null) {
+  // ช่วงโปรตีนมาจากแนวทาง ไม่ได้มาจากกฎใน DB — ไม่รู้ระยะไตก็บอกช่วงไม่ได้
+  if (!factorRange || proteinFactor === null) {
     throw badRequest(
-      'NO_MATCHING_RULE',
-      'ไม่มีกฎคำนวณโปรตีนข้อไหนตรงกับข้อมูลผู้ป่วยรายนี้ กรุณาตรวจสอบกฎหรือข้อมูลสุขภาพ',
+      'NO_GUIDELINE_RANGE',
+      preview.blockedReason ??
+        'ยังบอกช่วงโปรตีนไม่ได้ ต้องรู้ระยะโรคไตก่อน (กรอก eGFR หรือ Creatinine)',
     )
   }
 
-  // กฎ match แล้วแต่ข้อมูลไม่พอคำนวณฐานน้ำหนักที่กฎกำหนด (เช่น ใช้ IBW แต่ไม่มีส่วนสูง)
+  // ข้อมูลไม่พอคำนวณฐานน้ำหนัก (เช่น ใช้ IBW แต่ไม่มีส่วนสูงหรือไม่ระบุเพศ)
   if (proteinTargetGrams === null || referenceWeightKg === null) {
     throw badRequest(
       'MISSING_WEIGHT_BASIS_DATA',
@@ -98,13 +102,16 @@ export async function confirmProteinTarget(input: ConfirmInput) {
     const created = await tx.proteinCalculation.create({
       data: {
         patientId: input.patientId,
-        ruleId: selected.ruleId,
-        ruleVersion: selected.ruleVersion,
-        ruleNameSnapshot: selected.ruleName,
+        ruleId: selected?.ruleId ?? null,
+        ruleVersion: selected?.ruleVersion ?? null,
+        ruleNameSnapshot: selected?.ruleName ?? preview.guideline.basisLabel,
         weightBasis,
         referenceWeightKg: toDecimal(referenceWeightKg),
+        proteinFactorMin: toDecimal(factorRange.min),
+        proteinTargetGramsMin: gramsRange === null ? null : toDecimal(gramsRange.min),
         proteinFactor: toDecimal(proteinFactor),
         proteinTargetGrams: toDecimal(proteinTargetGrams),
+        guidelineGroup: preview.guideline.group,
         energyFactorKcal: preview.energyFactorKcal ?? null,
         energyTargetKcal:
           preview.energyTargetKcal === null ? null : toDecimal(preview.energyTargetKcal),
@@ -114,6 +121,7 @@ export async function confirmProteinTarget(input: ConfirmInput) {
         inputSnapshot: {
           facts: preview.facts,
           selectedRule: selected,
+          guideline: preview.guideline,
           weightBasisSource: preview.weightBasisSource,
           suggestedWeightBasis: preview.suggestedWeightBasis,
           ckd: preview.ckd,
@@ -139,8 +147,10 @@ export async function confirmProteinTarget(input: ConfirmInput) {
         : undefined,
       newValue: {
         id: created.id,
+        proteinTargetGramsMin: gramsRange?.min ?? null,
         proteinTargetGrams,
         proteinFactor,
+        guidelineGroup: preview.guideline.group,
         weightBasis,
         energyTargetKcal: preview.energyTargetKcal,
         ckdStageCode: preview.ckd?.code ?? null,
@@ -152,6 +162,7 @@ export async function confirmProteinTarget(input: ConfirmInput) {
 
     return {
       id: created.id,
+      proteinTargetGramsMin: gramsRange?.min ?? null,
       proteinTargetGrams,
       proteinFactor,
       referenceWeightKg,

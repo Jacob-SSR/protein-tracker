@@ -1,5 +1,6 @@
 'use client'
 
+import { APP_NAME } from '@/lib/branding'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
@@ -77,7 +78,7 @@ export function InviteManager({ invites }: { invites: InviteRow[] }) {
     try {
       if (navigator.share) {
         await navigator.share({
-          title: 'ลงทะเบียนผู้ป่วย — Protein Tracker',
+          title: `ลงทะเบียนผู้ป่วย — ${APP_NAME}`,
           text: withCode
             ? `เปิดลิงก์นี้เพื่อตั้งชื่อผู้ใช้และรหัสผ่านของคุณ (HN ${hn})`
             : `เปิดลิงก์นี้เพื่อตั้งบัญชีของคุณ (HN ${hn}) แล้วกรอกรหัสเชิญที่เจ้าหน้าที่แจ้งไว้`,

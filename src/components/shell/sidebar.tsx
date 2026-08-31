@@ -1,5 +1,6 @@
 'use client'
 
+import { APP_NAME, APP_TAGLINE } from '@/lib/branding'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { ReactNode } from 'react'
@@ -23,8 +24,8 @@ export function Sidebar({
           <IconKidney />
         </span>
         <div>
-          <p className="font-semibold leading-tight text-brand">KidneyCare</p>
-          <p className="text-[11px] leading-tight text-muted">โปรตีนสำหรับผู้ป่วยโรคไต</p>
+          <p className="text-sm font-semibold leading-tight text-brand">{APP_NAME}</p>
+          <p className="text-[11px] leading-tight text-muted">{APP_TAGLINE}</p>
         </div>
       </div>
 
