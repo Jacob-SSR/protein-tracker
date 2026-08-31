@@ -2,7 +2,8 @@
 
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { Alert, Button, Card, Field, Input, Select } from '@/components/ui'
+import { Alert, Button, Card, Field, Input, RequiredLegend, Select } from '@/components/ui'
+import { dateValue, hasErrors, optionalNumber, requiredText } from '@/lib/validate'
 import { LabFields, emptyLab, toLabPayload, type LabRow } from '@/components/lab-fields'
 import {
   bmiCategory,
@@ -77,6 +78,17 @@ export function PatientCreateForm({ comorbidities }: { comorbidities: Comorbidit
     })
   const ckd = ckdStageFromEgfr(egfr)
 
+  // ตรวจก่อนกดบันทึก คนกรอกจะได้เห็นว่าผิดตรงไหนทันที ไม่ต้องรอ error จาก API
+  const errors = {
+    hn: requiredText(hn, 'HN', 50),
+    fullName: requiredText(fullName, 'ชื่อ-นามสกุล', 200),
+    birthDate: dateValue(birthDate, 'วันเกิด', { allowFuture: false }),
+    measuredOn: dateValue(measuredOn, 'วันที่ตรวจ', { allowFuture: false }),
+    weightKg: optionalNumber(weightKg, 'น้ำหนัก', { min: 1, max: 400 }),
+    heightCm: optionalNumber(heightCm, 'ส่วนสูง', { min: 50, max: 250 }),
+    dryWeightKg: optionalNumber(dryWeightKg, 'Dry weight', { min: 1, max: 400 }),
+  }
+
   function reset() {
     setHn('')
     setFullName('')
@@ -148,23 +160,19 @@ export function PatientCreateForm({ comorbidities }: { comorbidities: Comorbidit
       description="กรอกข้อมูลผู้ป่วยและผลตรวจที่มีในหน้าเดียว กดบันทึกครั้งเดียวจบ — ช่องผลตรวจไม่บังคับ มีเท่าไหร่กรอกเท่านั้น"
     >
       <form onSubmit={submit} className="flex flex-col gap-5">
+        <RequiredLegend />
         <section className="flex flex-col gap-3">
           <p className="text-sm font-medium">ข้อมูลผู้ป่วย</p>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="HN">
-              <Input
-                value={hn}
-                onChange={(e) => setHn(e.target.value)}
-                required
-                autoComplete="off"
-              />
+            <Field label="HN" required error={errors.hn}>
+              <Input value={hn} onChange={(e) => setHn(e.target.value)} autoComplete="off" />
             </Field>
-            <Field label="ชื่อ-นามสกุล">
-              <Input value={fullName} onChange={(e) => setFullName(e.target.value)} required />
+            <Field label="ชื่อ-นามสกุล" required error={errors.fullName}>
+              <Input value={fullName} onChange={(e) => setFullName(e.target.value)} />
             </Field>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="วันเกิด" hint="จำเป็นสำหรับคำนวณ eGFR">
+            <Field label="วันเกิด" hint="จำเป็นสำหรับคำนวณ eGFR" error={errors.birthDate}>
               <Input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
             </Field>
             <Field label="เพศ" hint="จำเป็นสำหรับ eGFR / น้ำหนักอุดมคติ">
@@ -187,12 +195,12 @@ export function PatientCreateForm({ comorbidities }: { comorbidities: Comorbidit
             </p>
           </div>
 
-          <Field label="วันที่ตรวจ" className="max-w-48">
+          <Field label="วันที่ตรวจ" className="max-w-48" error={errors.measuredOn}>
             <Input type="date" value={measuredOn} onChange={(e) => setMeasuredOn(e.target.value)} />
           </Field>
 
           <div className="grid gap-3 sm:grid-cols-3">
-            <Field label="น้ำหนัก (กก.)">
+            <Field label="น้ำหนัก (กก.)" error={errors.weightKg}>
               <Input
                 type="number"
                 step="0.1"
@@ -202,7 +210,7 @@ export function PatientCreateForm({ comorbidities }: { comorbidities: Comorbidit
                 className="w-full tabular"
               />
             </Field>
-            <Field label="ส่วนสูง (ซม.)">
+            <Field label="ส่วนสูง (ซม.)" error={errors.heightCm}>
               <Input
                 type="number"
                 step="0.1"
@@ -212,7 +220,7 @@ export function PatientCreateForm({ comorbidities }: { comorbidities: Comorbidit
                 className="w-full tabular"
               />
             </Field>
-            <Field label="Dry weight (กก.)" hint="ถ้ามี">
+            <Field label="Dry weight (กก.)" hint="ถ้ามี" error={errors.dryWeightKg}>
               <Input
                 type="number"
                 step="0.1"
@@ -304,7 +312,7 @@ export function PatientCreateForm({ comorbidities }: { comorbidities: Comorbidit
         {error ? <Alert>{error}</Alert> : null}
 
         <div className="flex gap-2 border-t border-line pt-4">
-          <Button type="submit" disabled={pending || !hn.trim() || !fullName.trim()}>
+          <Button type="submit" disabled={pending || hasErrors(errors)}>
             {pending ? 'กำลังบันทึก...' : 'บันทึกผู้ป่วยและผลตรวจ'}
           </Button>
           <Button type="button" variant="ghost" onClick={() => setOpen(false)} disabled={pending}>

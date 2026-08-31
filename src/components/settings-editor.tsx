@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { Alert, Badge, Button, Card, Field, Input, Select } from '@/components/ui'
+import { requiredNumber, requiredText } from '@/lib/validate'
 
 type Threshold = {
   percent: number
@@ -213,7 +214,12 @@ function BackdateCard({ initial, meta }: { initial: number; meta?: Meta[string] 
         </div>
 
         {mode === 'limited' ? (
-          <Field label="ย้อนหลังได้ไม่เกิน (วัน)" className="max-w-40">
+          <Field
+            label="ย้อนหลังได้ไม่เกิน (วัน)"
+            className="max-w-40"
+            required
+            error={requiredNumber(String(days), 'จำนวนวัน', { min: 1, max: 365 })}
+          >
             <Input
               type="number"
               min={1}
@@ -275,7 +281,12 @@ function FutureCard({ initial, meta }: { initial: number; meta?: Meta[string] })
       }
     >
       <div className="flex flex-col gap-3">
-        <Field label="ล่วงหน้าได้ไม่เกิน (วัน)" className="max-w-40">
+        <Field
+          label="ล่วงหน้าได้ไม่เกิน (วัน)"
+          className="max-w-40"
+          required
+          error={requiredNumber(String(days), 'จำนวนวัน', { min: 0, max: 30 })}
+        >
           <Input
             type="number"
             min={0}
@@ -343,7 +354,12 @@ function ThresholdCard({ initial, meta }: { initial: Threshold[]; meta?: Meta[st
             key={index}
             className="flex flex-wrap items-end gap-3 rounded-lg border border-line p-3"
           >
-            <Field label="เมื่อถึง (%)" className="w-28">
+            <Field
+              label="เมื่อถึง (%)"
+              className="w-28"
+              required
+              error={requiredNumber(String(row.percent), 'เปอร์เซ็นต์', { min: 1, max: 500 })}
+            >
               <Input
                 type="number"
                 min={1}
@@ -369,7 +385,12 @@ function ThresholdCard({ initial, meta }: { initial: Threshold[]; meta?: Meta[st
                 ))}
               </Select>
             </Field>
-            <Field label="ข้อความที่ผู้ป่วยเห็น" className="min-w-60 flex-1">
+            <Field
+              label="ข้อความที่ผู้ป่วยเห็น"
+              className="min-w-60 flex-1"
+              required
+              error={requiredText(row.message, 'ข้อความ', 200)}
+            >
               <Input
                 value={row.message}
                 onChange={(event) => update(index, { message: event.target.value })}

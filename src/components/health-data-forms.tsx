@@ -3,7 +3,8 @@
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import type { Gender } from '@prisma/client'
-import { Alert, Badge, Button, Field, Input, Modal } from '@/components/ui'
+import { Alert, Badge, Button, Field, Input, Modal, RequiredLegend } from '@/components/ui'
+import { dateValue, hasErrors, optionalNumber } from '@/lib/validate'
 import {
   LabFields,
   labRowsFrom,
@@ -101,6 +102,14 @@ export function HealthDataForms({
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
+
+  // ตรวจค่าที่กรอกก่อนเปิดกล่องยืนยัน — น้ำหนัก/ส่วนสูงผิดหลักจะพาให้ BMI กับ IBW เพี้ยนทั้งชุด
+  const errors = {
+    measuredOn: dateValue(measuredOn, 'วันที่ตรวจ', { required: true, allowFuture: false }),
+    weightKg: optionalNumber(weightKg, 'น้ำหนัก', { min: 1, max: 400 }),
+    heightCm: optionalNumber(heightCm, 'ส่วนสูง', { min: 50, max: 250 }),
+    dryWeightKg: optionalNumber(dryWeightKg, 'Dry weight', { min: 1, max: 400 }),
+  }
 
   const filledLabs = pickFilledLabs(labs)
   const blockedBySchedule = schedule ? !schedule.canRecord && !earlyConfirmed : false
@@ -239,6 +248,8 @@ export function HealthDataForms({
               ภาวะบวม / น้ำหนักแห้ง ถูกเก็บคู่กับการชั่งน้ำหนัก — กรอกน้ำหนักด้วย
             </Alert>
           ) : null}
+
+          <RequiredLegend />
 
           <Step number={1} title="วันที่ตรวจและร่างกาย">
             <Field
@@ -417,17 +428,21 @@ export function HealthDataForms({
       {open ? (
         <div className="sticky bottom-0 flex flex-wrap items-center gap-3 border-t border-line bg-surface/95 px-5 py-3 backdrop-blur">
           <p className="min-w-0 flex-1 text-sm text-muted">
-            {needsWeight
-              ? 'ต้องกรอกน้ำหนักด้วย ภาวะบวม/น้ำหนักแห้งถูกเก็บคู่กับการชั่ง'
-              : blockedBySchedule
-                ? 'ยังไม่ถึงรอบตรวจ — กด "บันทึกก่อนกำหนด" ด้านบนถ้าจำเป็นต้องบันทึกวันนี้'
-                : pendingParts.length === 0
-                  ? 'ยังไม่มีอะไรเปลี่ยน — แก้ค่าที่ต้องการก่อนแล้วค่อยบันทึก'
-                  : `จะบันทึก: ${pendingParts.join(' · ')}`}
+            {hasErrors(errors)
+              ? 'มีช่องที่กรอกไม่ถูกต้อง แก้ตามข้อความสีแดงก่อนแล้วค่อยบันทึก'
+              : needsWeight
+                ? 'ต้องกรอกน้ำหนักด้วย ภาวะบวม/น้ำหนักแห้งถูกเก็บคู่กับการชั่ง'
+                : blockedBySchedule
+                  ? 'ยังไม่ถึงรอบตรวจ — กด "บันทึกก่อนกำหนด" ด้านบนถ้าจำเป็นต้องบันทึกวันนี้'
+                  : pendingParts.length === 0
+                    ? 'ยังไม่มีอะไรเปลี่ยน — แก้ค่าที่ต้องการก่อนแล้วค่อยบันทึก'
+                    : `จะบันทึก: ${pendingParts.join(' · ')}`}
           </p>
           <Button
             onClick={() => setConfirming(true)}
-            disabled={!hasChanges || needsWeight || blockedBySchedule || pending}
+            disabled={
+              !hasChanges || needsWeight || blockedBySchedule || pending || hasErrors(errors)
+            }
           >
             บันทึกข้อมูล
           </Button>

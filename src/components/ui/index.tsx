@@ -67,23 +67,55 @@ export function LinkButton({
   )
 }
 
+/**
+ * ช่องกรอกหนึ่งช่อง
+ *
+ * required = ติดดาวแดงให้เห็นตั้งแต่ยังไม่กรอก ว่าตรงไหนบังคับ
+ * error    = ข้อความใต้ช่อง โชว์เมื่อกรอกผิดจริงเท่านั้น ไม่ขึ้นตั้งแต่เปิดฟอร์ม
+ */
 export function Field({
   label,
   hint,
+  error,
+  required = false,
   children,
   className = '',
 }: {
   label: ReactNode
   hint?: ReactNode
+  error?: string | null
+  required?: boolean
   children: ReactNode
   className?: string
 }) {
   return (
     <label className={`flex flex-col gap-1 text-sm ${className}`}>
-      <span className="font-medium">{label}</span>
+      <span className="font-medium">
+        {label}
+        {required ? (
+          <span className="ml-1 text-danger" title="จำเป็นต้องกรอก" aria-label="จำเป็นต้องกรอก">
+            *
+          </span>
+        ) : null}
+      </span>
       {children}
-      {hint ? <span className="text-xs text-muted">{hint}</span> : null}
+      {error ? (
+        <span className="text-xs text-danger" role="alert">
+          {error}
+        </span>
+      ) : hint ? (
+        <span className="text-xs text-muted">{hint}</span>
+      ) : null}
     </label>
+  )
+}
+
+/** หมายเหตุบนหัวฟอร์ม อธิบายว่าดาวแดงคืออะไร ใส่ครั้งเดียวต่อฟอร์มพอ */
+export function RequiredLegend({ className = '' }: { className?: string }) {
+  return (
+    <p className={`text-xs text-muted ${className}`}>
+      ช่องที่มี <span className="text-danger">*</span> จำเป็นต้องกรอก
+    </p>
   )
 }
 

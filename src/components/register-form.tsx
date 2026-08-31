@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { Alert, Button, Field, Input } from '@/components/ui'
+import { Alert, Button, Field, Input, RequiredLegend } from '@/components/ui'
 import { request } from '@/lib/client/api'
 
 /**
@@ -61,12 +61,23 @@ export function RegisterForm({
     }
   }
 
+  // บอกตั้งแต่ยังพิมพ์อยู่ว่าผิดกติกาตรงไหน ไม่ต้องรอกดส่งแล้วเด้งกลับมา
+  const usernameError =
+    username === '' || /^[a-zA-Z0-9._-]{3,50}$/.test(username)
+      ? null
+      : 'ใช้ได้เฉพาะ a-z 0-9 . _ - และอย่างน้อย 3 ตัว'
+  const passwordError =
+    password === '' || password.length >= 8 ? null : 'รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร'
+
   return (
     <form onSubmit={submit} className="flex flex-col gap-3">
       {error ? <Alert>{error}</Alert> : null}
 
+      <RequiredLegend />
+
       <Field
         label="รหัสเชิญ"
+        required
         hint={
           codeLocked
             ? 'มาจากลิงก์ที่เจ้าหน้าที่ส่งให้ — แก้ไม่ได้'
@@ -88,6 +99,7 @@ export function RegisterForm({
 
       <Field
         label="HN"
+        required
         hint={hnLocked ? 'มาจากลิงก์ที่เจ้าหน้าที่ส่งให้ — แก้ไม่ได้' : 'เลขประจำตัวผู้ป่วยของคุณ'}
       >
         <Input
@@ -102,26 +114,36 @@ export function RegisterForm({
         />
       </Field>
 
-      <Field label="ตั้งชื่อผู้ใช้" hint="a-z 0-9 . _ - อย่างน้อย 3 ตัว">
+      <Field
+        label="ตั้งชื่อผู้ใช้"
+        required
+        hint="a-z 0-9 . _ - อย่างน้อย 3 ตัว"
+        error={usernameError}
+      >
         <Input
           value={username}
           onChange={(event) => setUsername(event.target.value)}
           autoComplete="username"
-          required
+          minLength={3}
+          maxLength={50}
         />
       </Field>
 
-      <Field label="ตั้งรหัสผ่าน" hint="อย่างน้อย 8 ตัวอักษร">
+      <Field label="ตั้งรหัสผ่าน" required hint="อย่างน้อย 8 ตัวอักษร" error={passwordError}>
         <Input
           type="password"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           autoComplete="new-password"
-          required
+          minLength={8}
         />
       </Field>
 
-      <Field label="ยืนยันรหัสผ่าน" hint={mismatch ? 'รหัสผ่านทั้งสองช่องไม่ตรงกัน' : undefined}>
+      <Field
+        label="ยืนยันรหัสผ่าน"
+        required
+        error={mismatch ? 'รหัสผ่านทั้งสองช่องไม่ตรงกัน' : null}
+      >
         <Input
           type="password"
           value={confirmPassword}
@@ -132,7 +154,11 @@ export function RegisterForm({
         />
       </Field>
 
-      <Button type="submit" disabled={!ready || pending} className="mt-1">
+      <Button
+        type="submit"
+        disabled={!ready || pending || usernameError !== null || passwordError !== null}
+        className="mt-1"
+      >
         {pending ? 'กำลังสร้างบัญชี...' : 'สร้างบัญชี'}
       </Button>
     </form>

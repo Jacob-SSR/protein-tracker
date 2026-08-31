@@ -2,7 +2,17 @@
 
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { Alert, Badge, Button, Card, Field, Input, Select, Table } from '@/components/ui'
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  Field,
+  Input,
+  RequiredLegend,
+  Select,
+  Table,
+} from '@/components/ui'
 import { request } from '@/lib/client/api'
 
 type Row = {
@@ -99,17 +109,26 @@ export function UserManager({
         description="บัญชีผู้ป่วยไม่ได้สร้างที่นี่ — เพิ่มผู้ป่วยที่หน้า “ผู้ป่วย” แล้วเปิดสิทธิ์เข้าระบบเป็นรายคนทีหลัง"
       >
         <form onSubmit={create} className="flex flex-col gap-4">
+          <RequiredLegend />
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="ชื่อผู้ใช้" hint="a-z 0-9 . _ - อย่างน้อย 3 ตัว">
-              <Input name="username" required minLength={3} autoComplete="off" />
+            <Field label="ชื่อผู้ใช้" hint="a-z 0-9 . _ - อย่างน้อย 3 ตัว" required>
+              <Input
+                name="username"
+                required
+                minLength={3}
+                maxLength={50}
+                pattern="[a-zA-Z0-9._-]{3,50}"
+                title="ใช้ได้เฉพาะ a-z 0-9 . _ - อย่างน้อย 3 ตัว"
+                autoComplete="off"
+              />
             </Field>
-            <Field label="รหัสผ่านเริ่มต้น" hint="อย่างน้อย 8 ตัวอักษร">
+            <Field label="รหัสผ่านเริ่มต้น" hint="อย่างน้อย 8 ตัวอักษร" required>
               <Input name="password" type="password" required minLength={8} autoComplete="off" />
             </Field>
-            <Field label="ชื่อ-นามสกุล">
-              <Input name="fullName" required />
+            <Field label="ชื่อ-นามสกุล" required>
+              <Input name="fullName" required maxLength={200} />
             </Field>
-            <Field label="ประเภทบัญชี">
+            <Field label="ประเภทบัญชี" required>
               <Select
                 name="role"
                 value={role}

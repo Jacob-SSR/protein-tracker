@@ -38,10 +38,10 @@ export function LoginForm() {
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-3">
-      <Field label="ชื่อผู้ใช้">
+      <Field label="ชื่อผู้ใช้" required>
         <Input name="username" required autoComplete="username" />
       </Field>
-      <Field label="รหัสผ่าน">
+      <Field label="รหัสผ่าน" required>
         <Input name="password" type="password" required autoComplete="current-password" />
       </Field>
       {error ? <Alert>{error}</Alert> : null}

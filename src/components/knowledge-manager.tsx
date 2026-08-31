@@ -10,11 +10,14 @@ import {
   EmptyState,
   Field,
   Input,
+  RequiredLegend,
   Modal,
   Textarea,
 } from '@/components/ui'
 import { KnowledgeImageField, type ArticleMedia } from '@/components/knowledge-image-field'
 import { request } from '@/lib/client/api'
+import { slugify } from '@/lib/knowledge/slug'
+import { hasErrors, optionalText, optionalUrl, requiredText } from '@/lib/validate'
 
 type Article = {
   id: string
@@ -104,7 +107,6 @@ export function KnowledgeManager({
         await request('/api/knowledge', {
           method: 'POST',
           json: {
-            slug: draft.slug.trim(),
             title: draft.title.trim(),
             content: draft.content,
             ...media,
@@ -159,6 +161,17 @@ export function KnowledgeManager({
     }
   }
 
+  // ตรวจฝั่งหน้าจอก่อน กันกดบันทึกแล้วเด้ง error จาก API ทีหลัง (API ยังตรวจซ้ำเสมอ)
+  const errors = draft
+    ? {
+        title: requiredText(draft.title, 'หัวข้อ', 200),
+        content: requiredText(draft.content, 'เนื้อหา', 20000),
+        linkUrl: optionalUrl(draft.linkUrl, 'ลิงก์เว็บไซต์'),
+        linkLabel: optionalText(draft.linkLabel, 'ข้อความบนลิงก์', 120),
+      }
+    : {}
+  const previewSlug = draft ? slugify(draft.title) : ''
+
   return (
     <div className="flex flex-col gap-4">
       {error && !deleting ? <Alert>{error}</Alert> : null}
@@ -167,21 +180,26 @@ export function KnowledgeManager({
       {draft ? (
         <Card title={draft.isNew ? 'เขียนบทความใหม่' : `แก้ไข: ${draft.slug}`}>
           <div className="flex flex-col gap-3">
-            {draft.isNew ? (
-              <Field label="slug" hint="ใช้ใน URL — a-z 0-9 และ - เช่น protein-basics">
-                <Input
-                  value={draft.slug}
-                  onChange={(event) => setDraft({ ...draft, slug: event.target.value })}
-                />
-              </Field>
-            ) : null}
-            <Field label="หัวข้อ">
+            <RequiredLegend />
+            <Field
+              label="หัวข้อ"
+              required
+              error={errors.title}
+              hint={
+                draft.isNew
+                  ? previewSlug
+                    ? `ลิงก์ที่จะได้: /patient/knowledge/${previewSlug}`
+                    : 'ระบบตั้งลิงก์ให้จากหัวข้อ'
+                  : `ลิงก์เดิม: /patient/knowledge/${draft.slug}`
+              }
+            >
               <Input
                 value={draft.title}
                 onChange={(event) => setDraft({ ...draft, title: event.target.value })}
+                maxLength={200}
               />
             </Field>
-            <Field label="เนื้อหา">
+            <Field label="เนื้อหา" required error={errors.content}>
               <Textarea
                 rows={12}
                 value={draft.content}
@@ -191,6 +209,7 @@ export function KnowledgeManager({
             <KnowledgeImageField
               media={draft}
               onChange={(media) => setDraft({ ...draft, ...media })}
+              errors={{ linkUrl: errors.linkUrl, linkLabel: errors.linkLabel }}
               cloudinaryReady={cloudinaryReady}
             />
             <label className="flex items-center gap-2 text-sm">
@@ -202,10 +221,7 @@ export function KnowledgeManager({
               เผยแพร่ให้ผู้ป่วยเห็น (เวอร์ชันเก่าจะถูกปลดเผยแพร่อัตโนมัติ)
             </label>
             <div className="flex gap-2">
-              <Button
-                onClick={save}
-                disabled={pending || !draft.title.trim() || !draft.content.trim()}
-              >
+              <Button onClick={save} disabled={pending || hasErrors(errors)}>
                 บันทึก
               </Button>
               <Button variant="ghost" onClick={() => setDraft(null)} disabled={pending}>

@@ -2,14 +2,26 @@
 
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { Alert, Badge, Button, Card, EmptyState, Field, Input, Modal } from '@/components/ui'
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Field,
+  Input,
+  Modal,
+  RequiredLegend,
+} from '@/components/ui'
 import {
   FoodUnitFields,
   emptyUnit,
   toUnitPayload,
+  unitsHaveErrors,
   type UnitDraft,
 } from '@/components/food-unit-fields'
 import { request } from '@/lib/client/api'
+import { optionalText, requiredText } from '@/lib/validate'
 
 type Status = 'PENDING' | 'ACTIVE' | 'REJECTED' | 'ARCHIVED'
 
@@ -402,6 +414,11 @@ function FoodForm({
       : [{ ...emptyUnit(), isDefault: true }],
   )
 
+  const formHasErrors =
+    requiredText(name, 'ชื่ออาหาร', 200) !== null ||
+    optionalText(category, 'หมวด', 100) !== null ||
+    unitsHaveErrors(units)
+
   return (
     <Card title={title}>
       <form
@@ -415,11 +432,16 @@ function FoodForm({
           })
         }}
       >
+        <RequiredLegend />
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="ชื่ออาหาร">
-            <Input value={name} onChange={(event) => setName(event.target.value)} required />
+          <Field label="ชื่ออาหาร" required error={requiredText(name, 'ชื่ออาหาร', 200)}>
+            <Input value={name} onChange={(event) => setName(event.target.value)} />
           </Field>
-          <Field label="หมวด" hint="เช่น เนื้อสัตว์ / ผัก / ของว่าง">
+          <Field
+            label="หมวด"
+            hint="เช่น เนื้อสัตว์ / ผัก / ของว่าง"
+            error={optionalText(category, 'หมวด', 100)}
+          >
             <Input value={category} onChange={(event) => setCategory(event.target.value)} />
           </Field>
         </div>
@@ -427,7 +449,7 @@ function FoodForm({
         <FoodUnitFields units={units} onChange={setUnits} />
 
         <div className="flex gap-2">
-          <Button type="submit" disabled={pending}>
+          <Button type="submit" disabled={pending || formHasErrors}>
             บันทึก
           </Button>
           <Button type="button" variant="ghost" onClick={onCancel} disabled={pending}>

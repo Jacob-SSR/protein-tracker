@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { uniqueSlug } from '@/lib/knowledge/slug'
 import { handle, ok, requireSession } from '@/lib/api'
 import { prisma } from '@/lib/db/prisma'
 import { requestMeta, writeAudit } from '@/lib/audit'
@@ -27,12 +28,6 @@ export async function GET() {
 }
 
 const createSchema = z.object({
-  slug: z
-    .string()
-    .trim()
-    .min(1)
-    .max(80)
-    .regex(/^[a-z0-9-]+$/, 'ใช้ได้เฉพาะ a-z 0-9 และ -'),
   title: z.string().trim().min(1).max(200),
   content: z.string().trim().min(1).max(20000),
   imageUrl: z.string().trim().url().max(500).nullish(),
@@ -78,9 +73,19 @@ export async function POST(request: Request) {
     try {
       const media = normalizeMedia(body)
 
+      // slug มาจากหัวข้อ ไม่ให้คนกรอกเอง — ชนของเดิมก็ต่อ -2, -3 ให้อัตโนมัติ
+      const existing = await prisma.knowledge.findMany({
+        select: { slug: true },
+        distinct: ['slug'],
+      })
+      const slug = uniqueSlug(
+        body.title,
+        existing.map((row) => row.slug),
+      )
+
       const created = await prisma.$transaction(async (tx) => {
         const row = await tx.knowledge.create({
-          data: { ...body, ...media, version: 1, authorId: session.userId },
+          data: { ...body, ...media, slug, version: 1, authorId: session.userId },
         })
         await writeAudit(tx, {
           actorId: session.userId,
@@ -100,7 +105,11 @@ export async function POST(request: Request) {
       return ok({ article: created }, 201)
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-        throw conflict('DUPLICATE_SLUG', 'slug นี้มีอยู่แล้ว ใช้หน้าแก้ไขเพื่อสร้างเวอร์ชันใหม่')
+        // แข่งกันสร้างพร้อมกันจน slug ชนพอดี — ผู้ใช้แค่กดบันทึกอีกครั้งก็ได้เลขใหม่
+        throw conflict(
+          'DUPLICATE_SLUG',
+          'มีบทความชื่อนี้ถูกสร้างพร้อมกันพอดี กดบันทึกอีกครั้งได้เลย',
+        )
       }
       throw error
     }

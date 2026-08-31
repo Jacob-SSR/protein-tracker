@@ -32,11 +32,14 @@ type UploadTicket = {
 export function KnowledgeImageField({
   media,
   onChange,
+  errors,
   cloudinaryReady,
 }: {
   media: ArticleMedia
   onChange: (media: ArticleMedia) => void
   /** false = ยังไม่ได้ตั้งค่า Cloudinary — บอกตั้งแต่แรก ดีกว่าปล่อยให้กดแล้วเจอ error */
+  /** ข้อความผิดพลาดของช่องลิงก์ ส่งมาจากฟอร์มที่ใช้ component นี้ */
+  errors?: { linkUrl?: string | null; linkLabel?: string | null }
   cloudinaryReady: boolean
 }) {
   const fileInput = useRef<HTMLInputElement>(null)
@@ -186,7 +189,11 @@ export function KnowledgeImageField({
       />
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="ลิงก์เว็บไซต์" hint="กดที่รูปแล้วจะไปที่ลิงก์นี้ ไม่ใช่ไปเปิดไฟล์รูป">
+        <Field
+          label="ลิงก์เว็บไซต์"
+          hint="กดที่รูปแล้วจะไปที่ลิงก์นี้ ไม่ใช่ไปเปิดไฟล์รูป"
+          error={errors?.linkUrl}
+        >
           <Input
             type="url"
             value={media.linkUrl}
@@ -194,7 +201,11 @@ export function KnowledgeImageField({
             placeholder="https://www.example.com/article"
           />
         </Field>
-        <Field label="ข้อความของลิงก์" hint="ไม่ใส่ก็ได้ ระบบจะใช้ชื่อเว็บแทน">
+        <Field
+          label="ข้อความของลิงก์"
+          hint="ไม่ใส่ก็ได้ ระบบจะใช้ชื่อเว็บแทน"
+          error={errors?.linkLabel}
+        >
           <Input
             value={media.linkLabel}
             onChange={(event) => onChange({ ...media, linkLabel: event.target.value })}

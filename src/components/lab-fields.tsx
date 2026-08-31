@@ -1,6 +1,7 @@
 'use client'
 
 import { Button, Field, Input, Select } from '@/components/ui'
+import { optionalNumber, requiredText } from '@/lib/validate'
 
 /**
  * ส่วนกรอกผลเลือด ใช้ร่วมกันระหว่างฟอร์มเพิ่มผู้ป่วยใหม่กับฟอร์มบันทึกข้อมูลสุขภาพ
@@ -118,7 +119,10 @@ export function LabFields({
                 <option value="__CUSTOM__">อื่นๆ (พิมพ์เอง)</option>
               </Select>
             </Field>
-            <Field label="ค่าที่ตรวจได้">
+            <Field
+              label="ค่าที่ตรวจได้"
+              error={optionalNumber(lab.value, 'ค่าที่ตรวจได้', { min: 0, max: 100000 })}
+            >
               <Input
                 type="number"
                 step="0.0001"
@@ -147,7 +151,14 @@ export function LabFields({
           </div>
 
           {lab.labType === '__CUSTOM__' ? (
-            <Field label="ชื่อรายการ" className="mt-3 max-w-64">
+            <Field
+              label="ชื่อรายการ"
+              className="mt-3 max-w-64"
+              required
+              error={
+                lab.value.trim() === '' ? null : requiredText(lab.customType, 'ชื่อรายการ', 50)
+              }
+            >
               <Input
                 value={lab.customType}
                 onChange={(event) => update(index, { customType: event.target.value })}

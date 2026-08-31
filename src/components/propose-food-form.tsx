@@ -2,14 +2,16 @@
 
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { Alert, Button, Card, Field, Input } from '@/components/ui'
+import { Alert, Button, Card, Field, Input, RequiredLegend } from '@/components/ui'
 import {
   FoodUnitFields,
   emptyUnit,
   toUnitPayload,
+  unitsHaveErrors,
   type UnitDraft,
 } from '@/components/food-unit-fields'
 import { request } from '@/lib/client/api'
+import { optionalText, requiredText } from '@/lib/validate'
 
 export function ProposeFoodForm() {
   const router = useRouter()
@@ -49,16 +51,16 @@ export function ProposeFoodForm() {
   return (
     <Card title="เสนออาหารเข้าระบบ">
       <form onSubmit={submit} className="flex flex-col gap-4">
+        <RequiredLegend />
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="ชื่ออาหาร">
+          <Field label="ชื่ออาหาร" required error={requiredText(name, 'ชื่ออาหาร', 200)}>
             <Input
               value={name}
               onChange={(event) => setName(event.target.value)}
               placeholder="เช่น ปลาทูนึ่ง"
-              required
             />
           </Field>
-          <Field label="หมวด" hint="ไม่บังคับ">
+          <Field label="หมวด" hint="ไม่บังคับ" error={optionalText(category, 'หมวด', 100)}>
             <Input value={category} onChange={(event) => setCategory(event.target.value)} />
           </Field>
         </div>
@@ -72,7 +74,16 @@ export function ProposeFoodForm() {
         {error ? <Alert>{error}</Alert> : null}
         {notice ? <Alert tone="ok">{notice}</Alert> : null}
 
-        <Button type="submit" disabled={pending} className="self-start">
+        <Button
+          type="submit"
+          disabled={
+            pending ||
+            requiredText(name, 'ชื่ออาหาร', 200) !== null ||
+            optionalText(category, 'หมวด', 100) !== null ||
+            unitsHaveErrors(units)
+          }
+          className="self-start"
+        >
           ส่งให้แอดมินตรวจสอบ
         </Button>
       </form>

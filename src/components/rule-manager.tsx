@@ -2,8 +2,19 @@
 
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { Alert, Badge, Button, Card, EmptyState, Field, Input, Select } from '@/components/ui'
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Field,
+  Input,
+  RequiredLegend,
+  Select,
+} from '@/components/ui'
 import { request } from '@/lib/client/api'
+import { requiredNumber, requiredText } from '@/lib/validate'
 
 type ConditionType =
   | 'GENDER'
@@ -218,8 +229,14 @@ export function RuleManager({
           }
         >
           <div className="flex flex-col gap-4">
+            <RequiredLegend />
             <div className="grid gap-3 sm:grid-cols-4">
-              <Field label="ชื่อกฎ" className="sm:col-span-2">
+              <Field
+                label="ชื่อกฎ"
+                className="sm:col-span-2"
+                required
+                error={requiredText(draft.name, 'ชื่อกฎ', 200)}
+              >
                 <Input
                   value={draft.name}
                   onChange={(event) => setDraft({ ...draft, name: event.target.value })}
@@ -235,7 +252,11 @@ export function RuleManager({
                   className="tabular"
                 />
               </Field>
-              <Field label="โปรตีน (g/kg/วัน)">
+              <Field
+                label="โปรตีน (g/kg/วัน)"
+                required
+                error={requiredNumber(String(draft.proteinFactor), 'โปรตีน', { min: 0.1, max: 5 })}
+              >
                 <Input
                   type="number"
                   step="0.05"

@@ -2,6 +2,7 @@
 
 import { useId } from 'react'
 import { Badge, Button, Field, Input } from '@/components/ui'
+import { optionalNumber, requiredNumber, requiredText } from '@/lib/validate'
 
 export type UnitDraft = {
   id?: string
@@ -29,6 +30,17 @@ export function toUnitPayload(units: UnitDraft[]) {
     energyKcal: unit.energyKcal.trim() ? Number(unit.energyKcal) : undefined,
     isDefault: unit.isDefault,
   }))
+}
+
+/** true = ยังมีหน่วยที่กรอกไม่ครบหรือกรอกผิด — ใช้ปิดปุ่มบันทึกของฟอร์มที่เรียกใช้ */
+export function unitsHaveErrors(units: UnitDraft[]) {
+  return units.some(
+    (unit) =>
+      requiredText(unit.unitName, 'ชื่อหน่วย', 50) !== null ||
+      requiredNumber(unit.proteinAmount, 'โปรตีน', { min: 0, max: 1000 }) !== null ||
+      optionalNumber(unit.gramsPerUnit, 'น้ำหนัก', { min: 0, max: 100000 }) !== null ||
+      optionalNumber(unit.energyKcal, 'พลังงาน', { min: 0, max: 10000 }) !== null,
+  )
 }
 
 /** ตัวแก้หน่วยอาหาร ใช้ร่วมกันทั้งฝั่ง admin และฟอร์มเสนออาหารของผู้ป่วย */
@@ -90,15 +102,23 @@ export function FoodUnitFields({
           </div>
 
           <div className="grid gap-3 sm:grid-cols-[minmax(9rem,1fr)_7rem_7rem_8rem]">
-            <Field label="ชื่อหน่วย" hint="ตามที่ผู้ป่วยจะเห็นตอนเลือก">
+            <Field
+              label="ชื่อหน่วย"
+              hint="ตามที่ผู้ป่วยจะเห็นตอนเลือก"
+              required
+              error={requiredText(unit.unitName, 'ชื่อหน่วย', 50)}
+            >
               <Input
                 value={unit.unitName}
                 onChange={(event) => update(index, { unitName: event.target.value })}
                 placeholder="เช่น 100 กรัม"
-                required
               />
             </Field>
-            <Field label="น้ำหนัก (g)" hint="ไม่บังคับ">
+            <Field
+              label="น้ำหนัก (g)"
+              hint="ไม่บังคับ"
+              error={optionalNumber(unit.gramsPerUnit, 'น้ำหนัก', { min: 0, max: 100000 })}
+            >
               <Input
                 type="number"
                 step="0.01"
@@ -109,7 +129,12 @@ export function FoodUnitFields({
                 placeholder="—"
               />
             </Field>
-            <Field label="โปรตีน (g)" hint="ต่อ 1 หน่วยนี้">
+            <Field
+              label="โปรตีน (g)"
+              hint="ต่อ 1 หน่วยนี้"
+              required
+              error={requiredNumber(unit.proteinAmount, 'โปรตีน', { min: 0, max: 1000 })}
+            >
               <Input
                 type="number"
                 step="0.01"
@@ -117,10 +142,13 @@ export function FoodUnitFields({
                 value={unit.proteinAmount}
                 onChange={(event) => update(index, { proteinAmount: event.target.value })}
                 className="w-full tabular"
-                required
               />
             </Field>
-            <Field label="พลังงาน (kcal)" hint="ต่อ 1 หน่วยนี้ · ไม่บังคับ">
+            <Field
+              label="พลังงาน (kcal)"
+              hint="ต่อ 1 หน่วยนี้ · ไม่บังคับ"
+              error={optionalNumber(unit.energyKcal, 'พลังงาน', { min: 0, max: 10000 })}
+            >
               <Input
                 type="number"
                 step="0.01"
